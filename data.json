@@ -1,0 +1,12 @@
+{
+  "guilds": {},
+  "global": {
+    "statusRotation": [
+      "Polishing silverware",
+      "Judging quietly",
+      "Preparing snacks",
+      "Watching the hallway"
+    ],
+    "statusIntervalMinutes": 10
+  }
+}
