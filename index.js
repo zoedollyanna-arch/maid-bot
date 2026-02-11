@@ -86,19 +86,27 @@ function getGuildState(guildId) {
 // Role helper functions
 function hasRole(member, roleName) {
 	return member.roles.cache.some(
-		role => role.name.toLowerCase() === roleName.toLowerCase()
+		role => role.name === roleName
 	);
 }
 
 function isHeadOfHousehold(member) {
-	return hasRole(member, "Head of Household");
+	// Server owner always counts as Head of Household
+	if (member.guild.ownerId === member.id) return true;
+	const roleName = process.env.ROLE_HEAD || "Head of Household";
+	return hasRole(member, roleName);
 }
 
 function getFamilyType(member) {
-	if (hasRole(member, "Head of Household")) return "head";
-	if (hasRole(member, "Kids")) return "kid";
-	if (hasRole(member, "Siblings")) return "sibling";
-	if (hasRole(member, "Kin")) return "kin";
+	const roleHead = process.env.ROLE_HEAD || "Head of Household";
+	const roleKids = process.env.ROLE_KIDS || "Kids";
+	const roleSiblings = process.env.ROLE_SIBLINGS || "Siblings";
+	const roleKin = process.env.ROLE_KIN || "Kin";
+	
+	if (hasRole(member, roleHead)) return "head";
+	if (hasRole(member, roleKids)) return "kid";
+	if (hasRole(member, roleSiblings)) return "sibling";
+	if (hasRole(member, roleKin)) return "kin";
 	return "guest";
 }
 
@@ -425,7 +433,8 @@ function scheduleCurfewCheck() {
 				const channel = await client.channels.fetch(guildState.lastActiveChannelId);
 				if (channel) {
 					const guild = await client.guilds.fetch(guildId);
-					const kidsRole = guild.roles.cache.find(r => r.name === "Kids");
+					const kidsRoleName = process.env.ROLE_KIDS || "Kids";
+					const kidsRole = guild.roles.cache.find(r => r.name === kidsRoleName);
 					const mention = kidsRole ? `<@&${kidsRole.id}>` : "Children";
 					const embed = maidEmbed(
 						"🕰 Curfew Notice",
@@ -1527,9 +1536,14 @@ client.on("interactionCreate", async (interaction) => {
 			`**Topic:** ${topic}\n\nAttendance required by all household members.`,
 			"#ffd700"
 		);
-		const roles = ["Head of Household", "Kids", "Siblings", "Kin"];
-		const mentions = roles.map(role => {
-			const discordRole = interaction.guild.roles.cache.find(r => r.name === role);
+		const roleNames = [
+			process.env.ROLE_HEAD || "Head of Household",
+			process.env.ROLE_KIDS || "Kids",
+			process.env.ROLE_SIBLINGS || "Siblings",
+			process.env.ROLE_KIN || "Kin"
+		];
+		const mentions = roleNames.map(roleName => {
+			const discordRole = interaction.guild.roles.cache.find(r => r.name === roleName);
 			return discordRole ? `<@&${discordRole.id}>` : null;
 		}).filter(Boolean).join(" ");
 		await interaction.reply({ content: mentions, embeds: [embed] });
