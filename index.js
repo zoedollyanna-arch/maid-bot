@@ -9,6 +9,7 @@ const {
 	Routes,
 	SlashCommandBuilder,
 	ChannelType,
+	EmbedBuilder,
 } = require("discord.js");
 require("dotenv").config();
 
@@ -75,9 +76,40 @@ function getGuildState(guildId) {
 				home: null,
 			},
 			curfew: "23:00",
+			favor: {},
+			checkIns: {},
 		};
 	}
 	return data.guilds[guildId];
+}
+
+// Role helper functions
+function hasRole(member, roleName) {
+	return member.roles.cache.some(
+		role => role.name.toLowerCase() === roleName.toLowerCase()
+	);
+}
+
+function isHeadOfHousehold(member) {
+	return hasRole(member, "Head of Household");
+}
+
+function getFamilyType(member) {
+	if (hasRole(member, "Head of Household")) return "head";
+	if (hasRole(member, "Kids")) return "kid";
+	if (hasRole(member, "Siblings")) return "sibling";
+	if (hasRole(member, "Kin")) return "kin";
+	return "guest";
+}
+
+// Embed builder utility
+function maidEmbed(title, description, color = "#f5c2e7") {
+	return new EmbedBuilder()
+		.setColor(color)
+		.setTitle(title)
+		.setDescription(description)
+		.setFooter({ text: "The Maid • Household System" })
+		.setTimestamp();
 }
 
 function choose(list) {
@@ -377,7 +409,7 @@ function scheduleQuietCheck() {
 function scheduleCurfewCheck() {
 	setInterval(async () => {
 		const now = new Date();
-		for (const [, guildState] of Object.entries(data.guilds)) {
+		for (const [guildId, guildState] of Object.entries(data.guilds)) {
 			const time = parseTime(guildState.curfew);
 			if (!time || !guildState.lastActiveChannelId) continue;
 			const curfewDate = new Date(now);
@@ -392,7 +424,15 @@ function scheduleCurfewCheck() {
 			try {
 				const channel = await client.channels.fetch(guildState.lastActiveChannelId);
 				if (channel) {
-					await channel.send("It is past curfew. Children should be asleep. I am watching.");
+					const guild = await client.guilds.fetch(guildId);
+					const kidsRole = guild.roles.cache.find(r => r.name === "Kids");
+					const mention = kidsRole ? `<@&${kidsRole.id}>` : "Children";
+					const embed = maidEmbed(
+						"🕰 Curfew Notice",
+						`It is past curfew. ${mention} should be asleep. I am watching.`,
+						"#2b2d42"
+					);
+					await channel.send({ embeds: [embed] });
 				}
 			} catch (error) {
 				// Ignore.
@@ -757,6 +797,64 @@ const COMMANDS = [
 			.setDescription(item.description)
 			.toJSON()
 	),
+	new SlashCommandBuilder()
+		.setName("reward")
+		.setDescription("Reward a household member with favor.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to reward.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("ground")
+		.setDescription("Ground a household member (reduce favor).")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to ground.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("favor")
+		.setDescription("Check your favor points.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Check another user's favor.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("household")
+		.setDescription("View household status and statistics.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("checkin")
+		.setDescription("Daily check-in for favor.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("familymeeting")
+		.setDescription("Call a family meeting (Head of Household only).")
+		.addStringOption((option) =>
+			option.setName("topic").setDescription("Meeting topic.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("tea")
+		.setDescription("The maid offers tea and comfort.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("tuckin")
+		.setDescription("Get tucked in for bedtime.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Tuck in someone else.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("comfort")
+		.setDescription("Request comfort from the maid.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Comfort another user.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("tidy")
+		.setDescription("The maid reports on the house.")
+		.toJSON(),
 ];
 
 async function registerCommands() {
@@ -879,6 +977,13 @@ client.on("interactionCreate", async (interaction) => {
 			return;
 		}
 		if (sub === "mode") {
+			if (!isHeadOfHousehold(interaction.member)) {
+				await interaction.reply({
+					content: "👑 Only the Head of Household may issue this command.",
+					ephemeral: true
+				});
+				return;
+			}
 			const mode = interaction.options.getString("mode", true);
 			guildState.mode = mode;
 			guildState.nightMode = false;
@@ -912,6 +1017,13 @@ client.on("interactionCreate", async (interaction) => {
 	}
 
 	if (command === "setrole") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
 		const roleName = interaction.options.getString("role", true);
 		const targetMember = interaction.options.getMember("user");
 		if (!targetMember) {
@@ -989,6 +1101,13 @@ client.on("interactionCreate", async (interaction) => {
 	}
 
 	if (command === "setcurfew") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
 		const input = interaction.options.getString("time", true);
 		const time = parseTime(input);
 		if (!time) {
@@ -1160,6 +1279,13 @@ client.on("interactionCreate", async (interaction) => {
 	}
 
 	if (command === "inittraditions") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
 		const defaults = [
 			{ name: "Family Friday", day: "Fri", time: "20:00" },
 			{ name: "Movie Night", day: "Sat", time: "19:00" },
@@ -1200,6 +1326,13 @@ client.on("interactionCreate", async (interaction) => {
 	}
 
 	if (command === "delevent") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
 		const id = interaction.options.getInteger("id", true);
 		const before = guildState.reminders.length;
 		guildState.reminders = guildState.reminders.filter((reminder) => reminder.id !== id);
@@ -1300,6 +1433,165 @@ client.on("interactionCreate", async (interaction) => {
 		return;
 	}
 
+	if (command === "reward") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
+		const targetMember = interaction.options.getMember("user");
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
+			return;
+		}
+		guildState.favor[targetMember.id] = (guildState.favor[targetMember.id] || 0) + 5;
+		scheduleSave();
+		const embed = maidEmbed("🍪 Good Behavior Acknowledged", `${targetMember.displayName} has been rewarded 5 favor points.\nCurrent favor: ${guildState.favor[targetMember.id]}`);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "ground") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may issue this command.",
+				ephemeral: true
+			});
+			return;
+		}
+		const targetMember = interaction.options.getMember("user");
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
+			return;
+		}
+		guildState.favor[targetMember.id] = (guildState.favor[targetMember.id] || 0) - 5;
+		scheduleSave();
+		const embed = maidEmbed("📉 Privileges Reduced", `${targetMember.displayName} has lost 5 favor points.\nCurrent favor: ${guildState.favor[targetMember.id]}`, "#e56b6f");
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "favor") {
+		const targetMember = interaction.options.getMember("user") || interaction.member;
+		const favor = guildState.favor[targetMember.id] || 0;
+		const embed = maidEmbed("📊 Favor Points", `${targetMember.displayName} has **${favor}** favor points.`);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "household") {
+		const favorEntries = Object.entries(guildState.favor).sort((a, b) => b[1] - a[1]);
+		const topBehaved = favorEntries[0] ? `<@${favorEntries[0][0]}> (${favorEntries[0][1]} favor)` : "None yet";
+		const mostChaotic = favorEntries[favorEntries.length - 1] && favorEntries[favorEntries.length - 1][1] < 0
+			? `<@${favorEntries[favorEntries.length - 1][0]}> (${favorEntries[favorEntries.length - 1][1]} favor)`
+			: "None yet";
+		const embed = maidEmbed(
+			"🏠 Household Status",
+			`**🌙 Night Mode:** ${guildState.nightMode ? "On" : "Off"}\n` +
+			`**🕰 Curfew:** ${guildState.curfew}\n` +
+			`**🧺 Active Reminders:** ${guildState.reminders.length}\n` +
+			`**📊 Top Behaved:** ${topBehaved}\n` +
+			`**😈 Most Chaotic:** ${mostChaotic}`
+		);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "checkin") {
+		const today = new Date().toDateString();
+		if (guildState.checkIns[interaction.user.id] === today) {
+			await interaction.reply({ content: "You have already checked in today.", ephemeral: true });
+			return;
+		}
+		guildState.checkIns[interaction.user.id] = today;
+		guildState.favor[interaction.user.id] = (guildState.favor[interaction.user.id] || 0) + 1;
+		scheduleSave();
+		const embed = maidEmbed("✅ Attendance Noted", `Daily check-in complete. You received 1 favor point.\nCurrent favor: ${guildState.favor[interaction.user.id]}`);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "familymeeting") {
+		if (!isHeadOfHousehold(interaction.member)) {
+			await interaction.reply({
+				content: "👑 Only the Head of Household may call a family meeting.",
+				ephemeral: true
+			});
+			return;
+		}
+		const topic = interaction.options.getString("topic") || "General household matters";
+		const embed = maidEmbed(
+			"🏠 Family Meeting Called",
+			`**Topic:** ${topic}\n\nAttendance required by all household members.`,
+			"#ffd700"
+		);
+		const roles = ["Head of Household", "Kids", "Siblings", "Kin"];
+		const mentions = roles.map(role => {
+			const discordRole = interaction.guild.roles.cache.find(r => r.name === role);
+			return discordRole ? `<@&${discordRole.id}>` : null;
+		}).filter(Boolean).join(" ");
+		await interaction.reply({ content: mentions, embeds: [embed] });
+		return;
+	}
+
+	if (command === "tea") {
+		const type = getFamilyType(interaction.member);
+		let message = "Sit. Drink slowly. Speak when ready.";
+		if (type === "kid") {
+			message = "Sit, young one. The tea is warm. Tell me what happened.";
+		} else if (type === "head") {
+			message = "Tea is prepared. Rest your thoughts here.";
+		}
+		const embed = maidEmbed("🍵 Tea Time", message);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "tuckin") {
+		const targetMember = interaction.options.getMember("user") || interaction.member;
+		const type = getFamilyType(targetMember);
+		let message = "Blanket adjusted. Sleep well.";
+		if (type === "kid") {
+			message = `Blanket adjusted for ${targetMember.displayName}. Forehead kiss deployed. Sleep tight, young one.`;
+		} else if (type === "head") {
+			message = `Rest well, ${targetMember.displayName}. The household is secure.`;
+		}
+		const embed = maidEmbed("🛏️ Tucked In", message);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "comfort") {
+		const targetMember = interaction.options.getMember("user") || interaction.member;
+		const type = getFamilyType(targetMember);
+		let message = "You are safe here. Breathe.";
+		if (type === "kid") {
+			message = `Gentle hug deployed for ${targetMember.displayName}. It will be alright, young one.`;
+		} else if (type === "sibling") {
+			message = `${targetMember.displayName}, sit. You do not have to explain. Just rest.`;
+		} else if (type === "head") {
+			message = `${targetMember.displayName}, even the Head of Household needs rest. I will manage things.`;
+		}
+		const embed = maidEmbed("🧸 Comfort Delivered", message, "#9d8ac5");
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
+	if (command === "tidy") {
+		const embed = maidEmbed(
+			"🧹 House Report",
+			choose([
+				"The house sparkles. Please do not undo my work.",
+				"Everything is in its place. Try to keep it that way.",
+				"I have tidied. The tea is brewing. All is calm."
+			])
+		);
+		await interaction.reply({ embeds: [embed] });
+		return;
+	}
+
 	if (SIMPLE_RESPONSE_COMMANDS.some((item) => item.name === command)) {
 		let reply = getResponse(command, guildState.mode);
 		if (command === "help") {
@@ -1322,7 +1614,19 @@ client.on("interactionCreate", async (interaction) => {
 		if (guildState.nightMode) {
 			reply = getNightModeResponse(reply);
 		}
-		await interaction.reply(reply);
+		
+		// Get emoji based on command
+		const emojiMap = {
+			dinner: "🍽️", menu: "📋", rules: "📜", cook: "👩‍🍳", snack: "🍪",
+			laundry: "🧺", fold: "👔", chores: "📝", bedtime: "🛏️", wake: "☀️",
+			routine: "🧸", comfort: "💜", hug: "🤗", badday: "🌧️", house: "🏠",
+			weather: "🌤️", homework: "📚", study: "✏️", help: "🤝", clean: "✨"
+		};
+		const emoji = emojiMap[command] || "🤍";
+		const title = `${emoji} ${command.charAt(0).toUpperCase() + command.slice(1)}`;
+		
+		const embed = maidEmbed(title, reply, guildState.nightMode ? "#2b2d42" : undefined);
+		await interaction.reply({ embeds: [embed] });
 		return;
 	}
 
