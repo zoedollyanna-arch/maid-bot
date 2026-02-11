@@ -1,10 +1,18 @@
 const fs = require("fs");
 const path = require("path");
-const { Client, GatewayIntentBits, Partials, ActivityType } = require("discord.js");
+const {
+	Client,
+	GatewayIntentBits,
+	Partials,
+	ActivityType,
+	REST,
+	Routes,
+	SlashCommandBuilder,
+	ChannelType,
+} = require("discord.js");
 require("dotenv").config();
 
 const DATA_PATH = path.join(__dirname, "data.json");
-const PREFIX = "!";
 
 const client = new Client({
 	intents: [
@@ -399,8 +407,387 @@ function maybeReact(message, keyword, emoji) {
 	}
 }
 
-client.once("ready", () => {
+const SIMPLE_RESPONSE_COMMANDS = [
+	{ name: "dinner", description: "Ask about dinner." },
+	{ name: "rules", description: "Ask about the rules." },
+	{ name: "menu", description: "Ask about the menu." },
+	{ name: "cook", description: "Ask what the maid is doing." },
+	{ name: "snack", description: "Ask for a snack." },
+	{ name: "laundry", description: "Ask about laundry." },
+	{ name: "fold", description: "Ask about folding laundry." },
+	{ name: "chores", description: "Ask about chores." },
+	{ name: "bedtime", description: "Ask about bedtime." },
+	{ name: "wake", description: "Ask about wake-up." },
+	{ name: "routine", description: "Ask about the routine." },
+	{ name: "comfort", description: "Ask for comfort." },
+	{ name: "hug", description: "Ask for a hug." },
+	{ name: "badday", description: "Mention a bad day." },
+	{ name: "house", description: "Ask about the house." },
+	{ name: "weather", description: "Ask about the weather." },
+	{ name: "homework", description: "Ask about homework time." },
+	{ name: "study", description: "Ask about study time." },
+	{ name: "help", description: "Ask for help." },
+	{ name: "clean", description: "Ask about cleaning." },
+];
+
+const DAY_CHOICES = [
+	{ name: "Sunday", value: "Sun" },
+	{ name: "Monday", value: "Mon" },
+	{ name: "Tuesday", value: "Tue" },
+	{ name: "Wednesday", value: "Wed" },
+	{ name: "Thursday", value: "Thu" },
+	{ name: "Friday", value: "Fri" },
+	{ name: "Saturday", value: "Sat" },
+];
+
+const COMMANDS = [
+	new SlashCommandBuilder()
+		.setName("maid")
+		.setDescription("Maid management commands.")
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("announce")
+				.setDescription("Send a maid announcement.")
+				.addStringOption((option) =>
+					option.setName("text").setDescription("Announcement text.").setRequired(true)
+				)
+		)
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("mode")
+				.setDescription("Set the maid mode.")
+				.addStringOption((option) =>
+					option
+						.setName("mode")
+						.setDescription("Choose a mode.")
+						.setRequired(true)
+						.addChoices(
+							{ name: "Polite", value: "polite" },
+							{ name: "Sassy", value: "sassy" },
+							{ name: "Chaotic", value: "chaotic" },
+							{ name: "Tired", value: "tired" }
+						)
+				)
+		)
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("nightmode")
+				.setDescription("Enable or disable night mode.")
+				.addBooleanOption((option) =>
+					option
+						.setName("enabled")
+						.setDescription("Set night mode on or off (default on).")
+						.setRequired(false)
+				)
+		)
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("help")
+				.setDescription("Ping guardians for calm mode.")
+		)
+		.addSubcommandGroup((group) =>
+			group
+				.setName("status")
+				.setDescription("Manage status rotation.")
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName("add")
+						.setDescription("Add a status to rotation.")
+						.addStringOption((option) =>
+							option.setName("text").setDescription("Status text.").setRequired(true)
+						)
+				)
+				.addSubcommand((subcommand) =>
+					subcommand
+						.setName("list")
+						.setDescription("List status rotation entries.")
+				)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("setannounce")
+		.setDescription("Set the announcement channel.")
+		.addChannelOption((option) =>
+			option
+				.setName("channel")
+				.setDescription("Channel to use for announcements.")
+				.addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
+				.setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("setrole")
+		.setDescription("Assign a family role to a user.")
+		.addStringOption((option) =>
+			option.setName("role").setDescription("Role name.").setRequired(true)
+		)
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to assign.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("roles")
+		.setDescription("List assigned roles.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("note")
+		.setDescription("Add a note about a user.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to note.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("text").setDescription("Note text.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("notes")
+		.setDescription("List recent notes.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Filter by user.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("remember")
+		.setDescription("Remember something for later.")
+		.addStringOption((option) =>
+			option.setName("text").setDescription("Memory text.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("recall")
+		.setDescription("Recall a remembered joke.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("setcurfew")
+		.setDescription("Set the nightly curfew.")
+		.addStringOption((option) =>
+			option.setName("time").setDescription("Time in HH:MM (24h).").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("curfew")
+		.setDescription("Show the current curfew.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("warnmute")
+		.setDescription("Warn someone about a temporary mute.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to warn.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("reason").setDescription("Reason for the warning.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("remind")
+		.setDescription("Set a reminder with a date and time.")
+		.addStringOption((option) =>
+			option.setName("text").setDescription("Reminder text.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option
+				.setName("datetime")
+				.setDescription("YYYY-MM-DD HH:MM (24h).")
+				.setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("remindme")
+		.setDescription("Set a reminder in X minutes.")
+		.addIntegerOption((option) =>
+			option.setName("minutes").setDescription("Minutes from now.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("text").setDescription("Reminder text.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("listreminders")
+		.setDescription("List reminders.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("delreminder")
+		.setDescription("Delete a reminder by id.")
+		.addIntegerOption((option) =>
+			option.setName("id").setDescription("Reminder id.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("setbirthday")
+		.setDescription("Set a birthday reminder.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Birthday person.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("date").setDescription("YYYY-MM-DD.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("setanniversary")
+		.setDescription("Set an anniversary reminder.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("Anniversary person.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("date").setDescription("YYYY-MM-DD.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("addevent")
+		.setDescription("Add a one-time event.")
+		.addStringOption((option) =>
+			option.setName("name").setDescription("Event name.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("date").setDescription("YYYY-MM-DD.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("time").setDescription("HH:MM (24h).").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("addweekly")
+		.setDescription("Add a weekly event.")
+		.addStringOption((option) =>
+			option.setName("name").setDescription("Event name.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option
+				.setName("day")
+				.setDescription("Day of the week.")
+				.setRequired(true)
+				.addChoices(...DAY_CHOICES)
+		)
+		.addStringOption((option) =>
+			option.setName("time").setDescription("HH:MM (24h).").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("inittraditions")
+		.setDescription("Create default weekly traditions.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("listevents")
+		.setDescription("List scheduled events.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("delevent")
+		.setDescription("Delete an event by id.")
+		.addIntegerOption((option) =>
+			option.setName("id").setDescription("Event id.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("sl")
+		.setDescription("Second Life commands.")
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("sethome")
+				.setDescription("Set SL home.")
+				.addStringOption((option) =>
+					option.setName("url").setDescription("SLURL.").setRequired(true)
+				)
+		)
+		.addSubcommand((subcommand) =>
+			subcommand
+				.setName("home")
+				.setDescription("Show SL home.")
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("roll")
+		.setDescription("Roll dice.")
+		.addStringOption((option) =>
+			option.setName("dice").setDescription("Dice format, e.g. 1d20.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("truth")
+		.setDescription("Get a truth prompt.")
+		.addBooleanOption((option) =>
+			option.setName("spicy").setDescription("Spicy mode.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("dare")
+		.setDescription("Get a dare prompt.")
+		.addBooleanOption((option) =>
+			option.setName("spicy").setDescription("Spicy mode.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("icebreaker")
+		.setDescription("Get an icebreaker prompt.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("fortune")
+		.setDescription("Get a fortune.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("address")
+		.setDescription("Set a custom address for a user.")
+		.addUserOption((option) =>
+			option.setName("user").setDescription("User to address.").setRequired(true)
+		)
+		.addStringOption((option) =>
+			option.setName("title").setDescription("Custom address/title.").setRequired(true)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("whoami")
+		.setDescription("Show how the maid addresses you.")
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("help")
+		.setDescription("Ask for help.")
+		.addStringOption((option) =>
+			option.setName("context").setDescription("Optional context.").setRequired(false)
+		)
+		.toJSON(),
+	new SlashCommandBuilder()
+		.setName("study")
+		.setDescription("Ask about study time.")
+		.addBooleanOption((option) =>
+			option.setName("roll").setDescription("Roll for effort.").setRequired(false)
+		)
+		.toJSON(),
+	...SIMPLE_RESPONSE_COMMANDS.filter((item) => !["help", "study"].includes(item.name)).map((item) =>
+		new SlashCommandBuilder()
+			.setName(item.name)
+			.setDescription(item.description)
+			.toJSON()
+	),
+];
+
+async function registerCommands() {
+	const clientId = process.env.DISCORD_CLIENT_ID;
+	if (!clientId) {
+		console.warn("DISCORD_CLIENT_ID not set. Skipping slash command registration.");
+		return;
+	}
+	const token = process.env.DISCORD_TOKEN;
+	if (!token) {
+		console.warn("DISCORD_TOKEN not set. Skipping slash command registration.");
+		return;
+	}
+	const rest = new REST({ version: "10" }).setToken(token);
+	const guildId = process.env.GUILD_ID;
+	if (!guildId) {
+		console.warn("GUILD_ID not set. Skipping slash command registration.");
+		return;
+	}
+	const route = Routes.applicationGuildCommands(clientId, guildId);
+	try {
+		await rest.put(route, { body: COMMANDS });
+		console.log(`Registered ${COMMANDS.length} guild commands.`);
+	} catch (error) {
+		console.error("Failed to register slash commands:", error);
+	}
+}
+
+client.once("ready", async () => {
 	console.log(`Logged in as ${client.user.tag}`);
+	await registerCommands();
 	setPresenceRotation();
 	scheduleReminderSweep();
 	scheduleQuietCheck();
@@ -449,34 +836,61 @@ client.on("messageCreate", async (message) => {
 			])).catch(() => undefined);
 		}
 	}
+});
 
-	if (!message.content.startsWith(PREFIX)) return;
+client.on("interactionCreate", async (interaction) => {
+	if (!interaction.isChatInputCommand()) return;
+	if (!interaction.guild) {
+		await interaction.reply({ content: "This command can only be used in servers.", ephemeral: true });
+		return;
+	}
 
-	const [rawCommand, ...args] = message.content.slice(PREFIX.length).trim().split(/\s+/);
-	const command = rawCommand.toLowerCase();
+	const guildState = getGuildState(interaction.guild.id);
+	guildState.lastMessageAt = Date.now();
+	guildState.lastActiveChannelId = interaction.channelId;
+
+	const command = interaction.commandName;
+	const member = interaction.member;
 
 	if (command === "maid") {
-		const sub = (args[0] || "").toLowerCase();
-		const text = args.slice(1).join(" ");
+		const group = interaction.options.getSubcommandGroup(false);
+		const sub = interaction.options.getSubcommand();
+		if (group === "status") {
+			if (sub === "add") {
+				const statusText = interaction.options.getString("text", true);
+				data.global.statusRotation.push(statusText);
+				scheduleSave();
+				await interaction.reply("Status added.");
+				return;
+			}
+			if (sub === "list") {
+				await interaction.reply(`Statuses: ${data.global.statusRotation.join(" | ")}`);
+				return;
+			}
+		}
 		if (sub === "announce") {
-			const channelId = guildState.announceChannelId || message.channel.id;
+			const text = interaction.options.getString("text", true);
+			const channelId = guildState.announceChannelId || interaction.channelId;
 			const channel = await client.channels.fetch(channelId);
 			if (channel) {
-				await channel.send(`\ud83d\udce3 Maid Announcement: ${text || "Family meeting in 10 minutes."}`);
+				await channel.send(`\ud83d\udce3 Maid Announcement: ${text}`);
 			}
+			await interaction.reply("Announcement sent.");
 			return;
 		}
-		if (["polite", "sassy", "chaotic", "tired"].includes(sub)) {
-			guildState.mode = sub;
+		if (sub === "mode") {
+			const mode = interaction.options.getString("mode", true);
+			guildState.mode = mode;
 			guildState.nightMode = false;
 			scheduleSave();
-			await message.channel.send(`Mode set to ${sub}.`);
+			await interaction.reply(`Mode set to ${mode}.`);
 			return;
 		}
-		if (sub === "nightmode" || sub === "night") {
-			guildState.nightMode = true;
+		if (sub === "nightmode") {
+			const enabled = interaction.options.getBoolean("enabled");
+			guildState.nightMode = enabled ?? true;
 			scheduleSave();
-			await message.channel.send("Night mode enabled. Voices low.");
+			await interaction.reply(guildState.nightMode ? "Night mode enabled. Voices low." : "Night mode disabled.");
 			return;
 		}
 		if (sub === "help") {
@@ -484,296 +898,264 @@ client.on("messageCreate", async (message) => {
 				.filter(([role]) => /(mom|dad|parent|guardian|adult)/i.test(role))
 				.map(([, userId]) => `<@${userId}>`);
 			const ping = adults.length > 0 ? adults.join(" ") : "";
-			await message.channel.send(`Calm mode engaged. ${ping}`.trim());
+			await interaction.reply(`Calm mode engaged. ${ping}`.trim());
 			return;
 		}
-		if (sub === "status") {
-			const action = (args[1] || "").toLowerCase();
-			const statusText = args.slice(2).join(" ");
-			if (action === "add" && statusText) {
-				data.global.statusRotation.push(statusText);
-				scheduleSave();
-				await message.channel.send("Status added.");
-				return;
-			}
-			if (action === "list") {
-				await message.channel.send(`Statuses: ${data.global.statusRotation.join(" | ")}`);
-				return;
-			}
-			await message.channel.send("Usage: !maid status add <text> | !maid status list");
-			return;
-		}
-		await message.channel.send("Usage: !maid announce <text> | polite | sassy | chaotic | tired | nightmode | help");
-		return;
 	}
 
 	if (command === "setannounce") {
-		const channel = message.mentions.channels.first();
-		if (!channel) {
-			await message.channel.send("Mention a channel to set announcements.");
-			return;
-		}
+		const channel = interaction.options.getChannel("channel", true);
 		guildState.announceChannelId = channel.id;
 		scheduleSave();
-		await message.channel.send(`Announcement channel set to ${channel}.`);
+		await interaction.reply(`Announcement channel set to ${channel}.`);
 		return;
 	}
 
 	if (command === "setrole") {
-		const roleName = args[0];
-		const member = message.mentions.members.first();
-		if (!roleName || !member) {
-			await message.channel.send("Usage: !setrole <role> @user");
+		const roleName = interaction.options.getString("role", true);
+		const targetMember = interaction.options.getMember("user");
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
 			return;
 		}
-		guildState.roles[roleName.toLowerCase()] = member.id;
-		guildState.rolesByUser[member.id] = roleName.toLowerCase();
+		guildState.roles[roleName.toLowerCase()] = targetMember.id;
+		guildState.rolesByUser[targetMember.id] = roleName.toLowerCase();
 		scheduleSave();
-		await message.channel.send(`Role ${roleName} set for ${member.displayName}.`);
+		await interaction.reply(`Role ${roleName} set for ${targetMember.displayName}.`);
 		return;
 	}
 
 	if (command === "roles") {
 		const entries = Object.entries(guildState.roles);
 		if (entries.length === 0) {
-			await message.channel.send("No roles set yet.");
+			await interaction.reply("No roles set yet.");
 			return;
 		}
-		await message.channel.send(entries.map(([role, userId]) => `${role}: <@${userId}>`).join("\n"));
+		await interaction.reply(entries.map(([role, userId]) => `${role}: <@${userId}>`).join("\n"));
 		return;
 	}
 
 	if (command === "note") {
-		const member = message.mentions.members.first();
-		const noteText = args.slice(1).join(" ");
-		if (!member || !noteText) {
-			await message.channel.send("Usage: !note @user <text>");
+		const targetMember = interaction.options.getMember("user");
+		const noteText = interaction.options.getString("text", true);
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
 			return;
 		}
 		guildState.notes.push({
-			userId: member.id,
+			userId: targetMember.id,
 			text: noteText,
 			at: new Date().toISOString(),
-			authorId: message.author.id,
+			authorId: interaction.user.id,
 		});
 		scheduleSave();
-		await message.channel.send("Noted. This will be used against you later.");
+		await interaction.reply("Noted. This will be used against you later.");
 		return;
 	}
 
 	if (command === "notes") {
-		const member = message.mentions.members.first();
-		const list = member
-			? guildState.notes.filter((note) => note.userId === member.id)
+		const targetMember = interaction.options.getMember("user");
+		const list = targetMember
+			? guildState.notes.filter((note) => note.userId === targetMember.id)
 			: guildState.notes;
 		if (list.length === 0) {
-			await message.channel.send("No notes yet.");
+			await interaction.reply("No notes yet.");
 			return;
 		}
-		await message.channel.send(list.slice(-5).map((note) => `- <@${note.userId}>: ${note.text}`).join("\n"));
+		await interaction.reply(list.slice(-5).map((note) => `- <@${note.userId}>: ${note.text}`).join("\n"));
 		return;
 	}
 
 	if (command === "remember") {
-		const quoted = parseQuoted(message.content);
-		const memory = quoted || args.join(" ");
-		if (!memory) {
-			await message.channel.send("Usage: !remember \"text\"");
-			return;
-		}
+		const memory = interaction.options.getString("text", true);
 		guildState.jokes.push({
 			text: memory,
 			at: new Date().toISOString(),
-			authorId: message.author.id,
+			authorId: interaction.user.id,
 		});
 		scheduleSave();
-		await message.channel.send("Noted. This will be used against you later.");
+		await interaction.reply("Noted. This will be used against you later.");
 		return;
 	}
 
 	if (command === "recall") {
 		if (guildState.jokes.length === 0) {
-			await message.channel.send("I remember nothing. Yet.");
+			await interaction.reply("I remember nothing. Yet.");
 			return;
 		}
 		const memory = choose(guildState.jokes);
-		await message.channel.send(memory.text);
+		await interaction.reply(memory.text);
 		return;
 	}
 
 	if (command === "setcurfew") {
-		const time = parseTime(args[0] || "");
+		const input = interaction.options.getString("time", true);
+		const time = parseTime(input);
 		if (!time) {
-			await message.channel.send("Usage: !setcurfew HH:MM (24h)");
+			await interaction.reply("Provide time as HH:MM (24h).");
 			return;
 		}
-		guildState.curfew = args[0];
+		guildState.curfew = input;
 		scheduleSave();
-		await message.channel.send(`Curfew set to ${args[0]}.`);
+		await interaction.reply(`Curfew set to ${input}.`);
 		return;
 	}
 
 	if (command === "curfew") {
-		await message.channel.send(`Curfew is ${guildState.curfew}.`);
+		await interaction.reply(`Curfew is ${guildState.curfew}.`);
 		return;
 	}
 
 	if (command === "warnmute") {
-		const member = message.mentions.members.first();
-		const reason = args.slice(1).join(" ") || "Please cool down.";
-		if (!member) {
-			await message.channel.send("Usage: !warnmute @user <reason>");
+		const targetMember = interaction.options.getMember("user");
+		const reason = interaction.options.getString("reason") || "Please cool down.";
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
 			return;
 		}
-		await message.channel.send(`Temporary mute warning for ${member.displayName}: ${reason}`);
+		await interaction.reply(`Temporary mute warning for ${targetMember.displayName}: ${reason}`);
 		return;
 	}
 
 	if (command === "remind") {
-		const quoted = parseQuoted(message.content);
-		const reminderText = quoted || args.slice(0, -2).join(" ");
-		const dateInput = args.slice(-2).join(" ");
+		const reminderText = interaction.options.getString("text", true);
+		const dateInput = interaction.options.getString("datetime", true);
 		const date = parseDateTime(dateInput);
-		if (!reminderText || !date) {
-			await message.channel.send("Usage: !remind \"text\" YYYY-MM-DD HH:MM");
+		if (!date) {
+			await interaction.reply("Provide datetime as YYYY-MM-DD HH:MM (24h).");
 			return;
 		}
 		const id = createReminderId(guildState);
 		addReminder(guildState, {
 			id,
-			guildId: message.guild.id,
-			channelId: message.channel.id,
-			userId: message.author.id,
+			guildId: interaction.guild.id,
+			channelId: interaction.channelId,
+			userId: interaction.user.id,
 			text: `\ud83d\udcc5 Reminder: ${reminderText}`,
 			time: date.toISOString(),
 		});
-		await message.channel.send(`Reminder set (#${id}).`);
+		await interaction.reply(`Reminder set (#${id}).`);
 		return;
 	}
 
 	if (command === "remindme") {
-		const minutes = Number(args[0]);
-		const reminderText = args.slice(1).join(" ");
-		if (!minutes || !reminderText) {
-			await message.channel.send("Usage: !remindme <minutes> <text>");
+		const minutes = interaction.options.getInteger("minutes", true);
+		const reminderText = interaction.options.getString("text", true);
+		if (!minutes || minutes <= 0) {
+			await interaction.reply("Provide a positive number of minutes.");
 			return;
 		}
 		const time = new Date(Date.now() + minutes * 60 * 1000);
 		const id = createReminderId(guildState);
 		addReminder(guildState, {
 			id,
-			guildId: message.guild.id,
-			channelId: message.channel.id,
-			userId: message.author.id,
+			guildId: interaction.guild.id,
+			channelId: interaction.channelId,
+			userId: interaction.user.id,
 			text: `\ud83d\udcc5 Reminder: ${reminderText}`,
 			time: time.toISOString(),
 		});
-		await message.channel.send(`Reminder set (#${id}).`);
+		await interaction.reply(`Reminder set (#${id}).`);
 		return;
 	}
 
 	if (command === "listreminders") {
 		if (guildState.reminders.length === 0) {
-			await message.channel.send("No reminders set.");
+			await interaction.reply("No reminders set.");
 			return;
 		}
 		const lines = guildState.reminders
 			.slice(0, 10)
 			.map((reminder) => `#${reminder.id} at ${new Date(reminder.time).toLocaleString()}: ${reminder.text}`);
-		await message.channel.send(lines.join("\n"));
+		await interaction.reply(lines.join("\n"));
 		return;
 	}
 
 	if (command === "delreminder") {
-		const id = Number(args[0]);
-		if (!id) {
-			await message.channel.send("Usage: !delreminder <id>");
-			return;
-		}
+		const id = interaction.options.getInteger("id", true);
 		const before = guildState.reminders.length;
 		guildState.reminders = guildState.reminders.filter((reminder) => reminder.id !== id);
 		scheduleSave();
-		await message.channel.send(before === guildState.reminders.length ? "No reminder found." : "Reminder deleted.");
+		await interaction.reply(before === guildState.reminders.length ? "No reminder found." : "Reminder deleted.");
 		return;
 	}
 
 	if (command === "setbirthday" || command === "setanniversary") {
-		const member = message.mentions.members.first();
-		const dateInput = args[1];
-		if (!member || !dateInput) {
-			await message.channel.send(`Usage: !${command} @user YYYY-MM-DD`);
+		const targetMember = interaction.options.getMember("user");
+		const dateInput = interaction.options.getString("date", true);
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
 			return;
 		}
 		const date = parseDateTime(`${dateInput} 09:00`);
 		if (!date) {
-			await message.channel.send("Provide a valid date YYYY-MM-DD.");
+			await interaction.reply("Provide a valid date YYYY-MM-DD.");
 			return;
 		}
 		ensureFutureDate(date);
 		const id = createReminderId(guildState);
 		addReminder(guildState, {
 			id,
-			guildId: message.guild.id,
-			channelId: message.channel.id,
-			userId: member.id,
+			guildId: interaction.guild.id,
+			channelId: interaction.channelId,
+			userId: targetMember.id,
 			text: command === "setbirthday"
-				? `\ud83c\udf82 Happy birthday <@${member.id}>!`
-				: `\ud83d\udc9e Happy anniversary, <@${member.id}>!`,
+				? `\ud83c\udf82 Happy birthday <@${targetMember.id}>!`
+				: `\ud83d\udc9e Happy anniversary, <@${targetMember.id}>!`,
 			time: date.toISOString(),
 			repeat: "yearly",
 		});
-		await message.channel.send("Date saved.");
+		await interaction.reply("Date saved.");
 		return;
 	}
 
 	if (command === "addevent") {
-		const quoted = parseQuoted(message.content);
-		const eventName = quoted || args.slice(0, -2).join(" ");
-		const dateInput = args.slice(-2).join(" ");
-		const date = parseDateTime(dateInput);
-		if (!eventName || !date) {
-			await message.channel.send("Usage: !addevent \"Name\" YYYY-MM-DD HH:MM");
+		const eventName = interaction.options.getString("name", true);
+		const dateInput = interaction.options.getString("date", true);
+		const timeInput = interaction.options.getString("time", true);
+		const date = parseDateTime(`${dateInput} ${timeInput}`);
+		if (!date) {
+			await interaction.reply("Provide date/time as YYYY-MM-DD and HH:MM (24h).");
 			return;
 		}
 		const id = createReminderId(guildState);
 		addReminder(guildState, {
 			id,
-			guildId: message.guild.id,
-			channelId: message.channel.id,
-			userId: message.author.id,
+			guildId: interaction.guild.id,
+			channelId: interaction.channelId,
+			userId: interaction.user.id,
 			text: `\ud83c\udf89 Event: ${eventName} is starting now.`,
 			time: date.toISOString(),
 		});
-		await message.channel.send(`Event scheduled (#${id}).`);
+		await interaction.reply(`Event scheduled (#${id}).`);
 		return;
 	}
 
 	if (command === "addweekly") {
-		const quoted = parseQuoted(message.content);
-		const eventName = quoted || args.slice(0, -2).join(" ");
-		const dayName = args.slice(-2, -1)[0];
-		const timeInput = args.slice(-1)[0];
+		const eventName = interaction.options.getString("name", true);
+		const dayName = interaction.options.getString("day", true);
+		const timeInput = interaction.options.getString("time", true);
 		const time = parseTime(timeInput || "");
-		if (!eventName || !dayName || !time) {
-			await message.channel.send("Usage: !addweekly \"Name\" Fri 20:00");
+		if (!time) {
+			await interaction.reply("Provide time as HH:MM (24h).");
 			return;
 		}
 		const next = nextWeeklyOccurrence(dayName, time);
 		if (!next) {
-			await message.channel.send("Invalid day name.");
+			await interaction.reply("Invalid day name.");
 			return;
 		}
 		const id = createReminderId(guildState);
 		addReminder(guildState, {
 			id,
-			guildId: message.guild.id,
-			channelId: message.channel.id,
-			userId: message.author.id,
+			guildId: interaction.guild.id,
+			channelId: interaction.channelId,
+			userId: interaction.user.id,
 			text: `\ud83c\udf89 Weekly tradition: ${eventName} starts now.`,
 			time: next.toISOString(),
 			repeat: "weekly",
 		});
-		await message.channel.send(`Weekly event scheduled (#${id}).`);
+		await interaction.reply(`Weekly event scheduled (#${id}).`);
 		return;
 	}
 
@@ -791,83 +1173,73 @@ client.on("messageCreate", async (message) => {
 			const id = createReminderId(guildState);
 			addReminder(guildState, {
 				id,
-				guildId: message.guild.id,
-				channelId: message.channel.id,
-				userId: message.author.id,
+				guildId: interaction.guild.id,
+				channelId: interaction.channelId,
+				userId: interaction.user.id,
 				text: `\ud83c\udf89 Weekly tradition: ${item.name} starts now.`,
 				time: next.toISOString(),
 				repeat: "weekly",
 			});
 			created.push(item.name);
 		}
-		await message.channel.send(created.length > 0 ? `Traditions added: ${created.join(", ")}` : "No traditions added.");
+		await interaction.reply(created.length > 0 ? `Traditions added: ${created.join(", ")}` : "No traditions added.");
 		return;
 	}
 
 	if (command === "listevents") {
 		if (guildState.reminders.length === 0) {
-			await message.channel.send("No events scheduled.");
+			await interaction.reply("No events scheduled.");
 			return;
 		}
 		const lines = guildState.reminders
 			.filter((reminder) => /Event|Weekly tradition/i.test(reminder.text))
 			.slice(0, 10)
 			.map((reminder) => `#${reminder.id} at ${new Date(reminder.time).toLocaleString()}: ${reminder.text}`);
-		await message.channel.send(lines.join("\n") || "No events scheduled.");
+		await interaction.reply(lines.join("\n") || "No events scheduled.");
 		return;
 	}
 
 	if (command === "delevent") {
-		const id = Number(args[0]);
-		if (!id) {
-			await message.channel.send("Usage: !delevent <id>");
-			return;
-		}
+		const id = interaction.options.getInteger("id", true);
 		const before = guildState.reminders.length;
 		guildState.reminders = guildState.reminders.filter((reminder) => reminder.id !== id);
 		scheduleSave();
-		await message.channel.send(before === guildState.reminders.length ? "No event found." : "Event deleted.");
+		await interaction.reply(before === guildState.reminders.length ? "No event found." : "Event deleted.");
 		return;
 	}
 
 	if (command === "sl") {
-		const sub = (args[0] || "").toLowerCase();
+		const sub = interaction.options.getSubcommand();
 		if (sub === "sethome") {
-			const url = args[1];
-			if (!url) {
-				await message.channel.send("Usage: !sl sethome <SLURL>");
-				return;
-			}
+			const url = interaction.options.getString("url", true);
 			guildState.sl.home = url;
 			scheduleSave();
-			await message.channel.send("SL home set.");
+			await interaction.reply("SL home set.");
 			return;
 		}
 		if (sub === "home") {
-			await message.channel.send(guildState.sl.home || "No SL home set yet.");
+			await interaction.reply(guildState.sl.home || "No SL home set yet.");
 			return;
 		}
-		await message.channel.send("Usage: !sl sethome <SLURL> | !sl home");
-		return;
 	}
 
 	if (command === "roll") {
-		const input = args[0] || "1d20";
+		const input = interaction.options.getString("dice") || "1d20";
 		const match = input.match(/^(\d+)d(\d+)$/i);
 		if (!match) {
-			await message.channel.send("Usage: !roll 1d20");
+			await interaction.reply("Provide dice in NdM format, like 1d20.");
 			return;
 		}
 		const count = Math.min(10, Number(match[1]));
 		const sides = Math.min(1000, Number(match[2]));
 		const rolls = Array.from({ length: count }, () => 1 + Math.floor(Math.random() * sides));
 		const total = rolls.reduce((sum, value) => sum + value, 0);
-		await message.channel.send(`\ud83c\udfb2 Rolls: ${rolls.join(", ")} (Total ${total})`);
+		await interaction.reply(`\ud83c\udfb2 Rolls: ${rolls.join(", ")} (Total ${total})`);
 		return;
 	}
 
 	if (command === "truth" || command === "dare") {
-		const spicy = args[0] && args[0].toLowerCase() === "spicy";
+		const spicy = interaction.options.getBoolean("spicy") === true;
 		const prompts = command === "truth"
 			? (spicy
 				? [
@@ -887,12 +1259,12 @@ client.on("messageCreate", async (message) => {
 					"Dare: Post your favorite cozy emoji.",
 					"Dare: Share a wholesome fact about you.",
 				]);
-		await message.channel.send(choose(prompts));
+		await interaction.reply(choose(prompts));
 		return;
 	}
 
 	if (command === "icebreaker") {
-		await message.channel.send(choose([
+		await interaction.reply(choose([
 			"Icebreaker: What is your comfort movie?",
 			"Icebreaker: Which room in the house do you claim?",
 			"Icebreaker: What snack represents your mood today?",
@@ -901,7 +1273,7 @@ client.on("messageCreate", async (message) => {
 	}
 
 	if (command === "fortune") {
-		await message.channel.send(choose([
+		await interaction.reply(choose([
 			"You will argue today. Over nothing.",
 			"A cozy surprise waits in your near future.",
 			"Someone will ask you for help. Say yes.",
@@ -909,48 +1281,52 @@ client.on("messageCreate", async (message) => {
 		return;
 	}
 
-	if (command === "dinner" || command === "rules" || command === "menu" || command === "cook" ||
-		command === "snack" || command === "laundry" || command === "fold" || command === "chores" ||
-		command === "bedtime" || command === "wake" || command === "routine" || command === "comfort" ||
-		command === "hug" || command === "badday" || command === "house" || command === "weather" ||
-		command === "homework" || command === "study" || command === "help" || command === "clean") {
-		let reply = getResponse(command, guildState.mode);
-		if (command === "help" && args.length > 0) {
-			reply = `${getResponse("help", guildState.mode)} (${args.join(" ")})`;
+	if (command === "address") {
+		const targetMember = interaction.options.getMember("user");
+		const address = interaction.options.getString("title", true);
+		if (!targetMember) {
+			await interaction.reply("That user is not in this server.");
+			return;
 		}
-		if (command === "study" && args[0] === "roll") {
-			const effort = Math.floor(Math.random() * 20) + 1;
-			reply = `Effort: ${effort}/20. Acceptable.`;
+		guildState.addresses[targetMember.id] = address;
+		scheduleSave();
+		await interaction.reply(`Address set for ${targetMember.displayName}.`);
+		return;
+	}
+
+	if (command === "whoami") {
+		const title = formatUserDisplay(member, guildState);
+		await interaction.reply(`You are addressed as: ${title}`);
+		return;
+	}
+
+	if (SIMPLE_RESPONSE_COMMANDS.some((item) => item.name === command)) {
+		let reply = getResponse(command, guildState.mode);
+		if (command === "help") {
+			const context = interaction.options.getString("context");
+			if (context) {
+				reply = `${getResponse("help", guildState.mode)} (${context})`;
+			}
+		}
+		if (command === "study") {
+			const roll = interaction.options.getBoolean("roll") === true;
+			if (roll) {
+				const effort = Math.floor(Math.random() * 20) + 1;
+				reply = `Effort: ${effort}/20. Acceptable.`;
+			}
 		}
 		if (["homework", "study", "bedtime"].includes(command)) {
-			const address = formatUserDisplay(message.member, guildState);
+			const address = formatUserDisplay(member, guildState);
 			reply = `${address}, ${reply}`;
 		}
 		if (guildState.nightMode) {
 			reply = getNightModeResponse(reply);
 		}
-		await message.channel.send(reply);
+		await interaction.reply(reply);
 		return;
 	}
 
-	if (command === "address") {
-		const member = message.mentions.members.first();
-		const address = args.slice(1).join(" ");
-		if (!member || !address) {
-			await message.channel.send("Usage: !address @user <title>");
-			return;
-		}
-		guildState.addresses[member.id] = address;
-		scheduleSave();
-		await message.channel.send(`Address set for ${member.displayName}.`);
-		return;
-	}
-
-	if (command === "whoami") {
-		const title = formatUserDisplay(message.member, guildState);
-		await message.channel.send(`You are addressed as: ${title}`);
-		return;
-	}
+	await interaction.reply("Unknown command.");
 });
 
 client.login(process.env.DISCORD_TOKEN);
