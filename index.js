@@ -1,5 +1,17 @@
 const fs = require("fs");
 const path = require("path");
+const http = require("http");
+
+// ── Render Web Service keep-alive ──────────────────────────────────────────
+// Render's free tier requires a listening HTTP server or it will kill the
+// process. This tiny server just returns 200 OK for health checks.
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+	res.writeHead(200, { "Content-Type": "text/plain" });
+	res.end("Maid bot is on duty. 🧹");
+}).listen(PORT, () => console.log(`[HTTP] Health server listening on port ${PORT}`));
+// ──────────────────────────────────────────────────────────────────────────
+
 const {
 	Client,
 	GatewayIntentBits,
