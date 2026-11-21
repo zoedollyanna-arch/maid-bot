@@ -100,6 +100,13 @@ function ensureSeedData(guildState) {
 	if (guildState.rpMemories.length === 0) {
 		guildState.rpMemories.push({ ...SEED_MEMORY });
 	}
+
+	// Always ensure tending channel is set to the Jwett Estates tending channel
+	if (!guildState.tendingChannelId) {
+		guildState.tendingChannelId = "1461354238902014124";
+	}
+	if (!guildState.morningTime) guildState.morningTime = "08:00";
+	if (!guildState.nightTime) guildState.nightTime = "21:00";
 }
 
 function getRpProfile(guildState, userId) {
