@@ -1,5 +1,82 @@
 {
-  "guilds": {},
+  "guilds": {
+    "1461354800833626122": {
+      "mode": "sassy",
+      "nightMode": false,
+      "welcomeChannelId": "1461354800833626122",
+      "announceChannelId": null,
+      "lastActiveChannelId": null,
+      "lastMessageAt": 0,
+      "lastNudgeAt": 0,
+      "lastCurfewAt": null,
+      "cooldowns": {},
+      "roles": {},
+      "rolesByUser": {
+        "1197552066269282306": "head",
+        "782978151185121280": "kid"
+      },
+      "addresses": {},
+      "notes": [],
+      "jokes": [],
+      "reminders": [],
+      "sl": {
+        "home": null
+      },
+      "curfew": "23:00",
+      "favor": {
+        "1197552066269282306": 50,
+        "782978151185121280": 50
+      },
+      "checkIns": {},
+      "incidents": [],
+      "rpProfiles": {
+        "782978151185121280": {
+          "familyRole": "Daughter 🧸",
+          "mood": "Spoiled & Loved 🌸",
+          "comfortItem": "Teddy Bear 🐻",
+          "pronouns": "she/her",
+          "characterAge": "Little Princess",
+          "title": "Princess Jwett 👑",
+          "bio": "The cherished daughter of Jwett Estates, protected and adored by Mommy.",
+          "momentsCount": 25
+        },
+        "1197552066269282306": {
+          "familyRole": "Mother 👑",
+          "mood": "Protective & Loving 💕",
+          "comfortItem": "Warm Chamomile Tea 🫖",
+          "pronouns": "she/her",
+          "characterAge": "Matriarch",
+          "title": "Mother Jwett 👑",
+          "bio": "The devoted Mother of Jwett Estates, loving her daughter Princess Jwett to the moon and back.",
+          "momentsCount": 25
+        }
+      },
+      "rpRelationships": {
+        "1197552066269282306:782978151185121280": {
+          "userA": "1197552066269282306",
+          "userB": "782978151185121280",
+          "relationAtoB": "Mother",
+          "relationBtoA": "Daughter",
+          "closeness": 100,
+          "createdAt": 1795236529835,
+          "lastInteraction": 1795236529835
+        }
+      },
+      "rpMemories": [
+        {
+          "id": "mem_jwett_foundation",
+          "timestamp": 1795236529835,
+          "userIds": [
+            "1197552066269282306",
+            "782978151185121280"
+          ],
+          "title": "🌙 A Little Love Before Dreamland",
+          "description": "Mother Jwett tucked Princess Jwett into bed with her teddy bear, kissing her forehead: 'Sweet dreams, my pretty girl. Mommy loves you to the moon and back.'",
+          "category": "bedtime"
+        }
+      ]
+    }
+  },
   "global": {
     "statusRotation": [
       "Polishing silverware",

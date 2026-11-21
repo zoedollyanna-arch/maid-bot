@@ -17,15 +17,98 @@ const COLORS = {
 	SPECIAL: 0xf6c177, // Warm Golden Honey
 };
 
-// ── Data Helpers ────────────────────────────────────────────────────────────
-function getRpProfile(guildState, userId) {
+// ── Data Helpers & Seed Profiles ────────────────────────────────────────────
+const MOTHER_ID = "1197552066269282306";
+const DAUGHTER_ID = "782978151185121280";
+
+const SEED_PROFILES = {
+	[DAUGHTER_ID]: {
+		familyRole: "Daughter 🧸",
+		mood: "Spoiled & Loved 🌸",
+		comfortItem: "Teddy Bear 🐻",
+		pronouns: "she/her",
+		characterAge: "Little Princess",
+		title: "Princess Jwett 👑",
+		bio: "The cherished daughter of Jwett Estates, protected and adored by Mommy.",
+		momentsCount: 25,
+	},
+	[MOTHER_ID]: {
+		familyRole: "Mother 👑",
+		mood: "Protective & Loving 💕",
+		comfortItem: "Warm Chamomile Tea 🫖",
+		pronouns: "she/her",
+		characterAge: "Matriarch",
+		title: "Mother Jwett 👑",
+		bio: "The devoted Mother of Jwett Estates, loving her daughter Princess Jwett to the moon and back.",
+		momentsCount: 25,
+	},
+};
+
+const SEED_RELATIONSHIP = {
+	userA: MOTHER_ID,
+	userB: DAUGHTER_ID,
+	relationAtoB: "Mother",
+	relationBtoA: "Daughter",
+	closeness: 100, // Highest tier: Inseparable Souls 💕 ⭐⭐⭐⭐⭐
+	createdAt: Date.now(),
+	lastInteraction: Date.now(),
+};
+
+const SEED_MEMORY = {
+	id: "mem_jwett_foundation",
+	timestamp: Date.now(),
+	userIds: [MOTHER_ID, DAUGHTER_ID],
+	title: "🌙 A Little Love Before Dreamland",
+	description: "Mother Jwett tucked Princess Jwett into bed with her teddy bear, kissing her forehead: 'Sweet dreams, my pretty girl. Mommy loves you to the moon and back.'",
+	category: "bedtime",
+};
+
+function ensureSeedData(guildState) {
+	if (!guildState) return;
 	if (!guildState.rpProfiles) guildState.rpProfiles = {};
+	if (!guildState.rpRelationships) guildState.rpRelationships = {};
+	if (!guildState.rpMemories) guildState.rpMemories = [];
+
+	for (const [id, prof] of Object.entries(SEED_PROFILES)) {
+		if (!guildState.rpProfiles[id]) {
+			guildState.rpProfiles[id] = { ...prof };
+		} else {
+			if (id === DAUGHTER_ID) {
+				guildState.rpProfiles[id].familyRole = "Daughter 🧸";
+				guildState.rpProfiles[id].pronouns = "she/her";
+				guildState.rpProfiles[id].title = "Princess Jwett 👑";
+			} else if (id === MOTHER_ID) {
+				guildState.rpProfiles[id].familyRole = "Mother 👑";
+				guildState.rpProfiles[id].pronouns = "she/her";
+				guildState.rpProfiles[id].title = "Mother Jwett 👑";
+			}
+		}
+	}
+
+	const relKey1 = `${MOTHER_ID}:${DAUGHTER_ID}`;
+	const relKey2 = `${DAUGHTER_ID}:${MOTHER_ID}`;
+	if (!guildState.rpRelationships[relKey1] && !guildState.rpRelationships[relKey2]) {
+		guildState.rpRelationships[relKey1] = { ...SEED_RELATIONSHIP };
+	} else {
+		const targetKey = guildState.rpRelationships[relKey1] ? relKey1 : relKey2;
+		guildState.rpRelationships[targetKey].closeness = Math.max(guildState.rpRelationships[targetKey].closeness || 0, 100);
+		guildState.rpRelationships[targetKey].relationAtoB = "Mother";
+		guildState.rpRelationships[targetKey].relationBtoA = "Daughter";
+	}
+
+	if (guildState.rpMemories.length === 0) {
+		guildState.rpMemories.push({ ...SEED_MEMORY });
+	}
+}
+
+function getRpProfile(guildState, userId) {
+	ensureSeedData(guildState);
 	if (!guildState.rpProfiles[userId]) {
 		guildState.rpProfiles[userId] = {
 			familyRole: "Family Member 🏡",
 			mood: "Cozy 🍵",
 			comfortItem: "Silk Blanket 🎀",
-			pronouns: "they/them",
+			pronouns: "she/her",
 			characterAge: "Youth",
 			title: "Cherished Member",
 			bio: "",
@@ -36,6 +119,7 @@ function getRpProfile(guildState, userId) {
 }
 
 function getRelationship(guildState, userAId, userBId) {
+	ensureSeedData(guildState);
 	if (!guildState.rpRelationships) guildState.rpRelationships = {};
 	const key1 = `${userAId}:${userBId}`;
 	const key2 = `${userBId}:${userAId}`;
@@ -1413,5 +1497,8 @@ module.exports = {
 	handleJwettMomentButton,
 	getRpProfile,
 	addRpMemory,
+	ensureSeedData,
+	MOTHER_ID,
+	DAUGHTER_ID,
 	COLORS,
 };

@@ -36,6 +36,9 @@ const {
 	handleJwettMomentButton,
 	getRpProfile,
 	addRpMemory,
+	ensureSeedData,
+	MOTHER_ID,
+	DAUGHTER_ID,
 	COLORS: RP_COLORS,
 } = require("./jwettMoments");
 
@@ -116,6 +119,16 @@ function getGuildState(guildId) {
 	if (!data.guilds[guildId].cooldowns) data.guilds[guildId].cooldowns = {};
 	if (!data.guilds[guildId].favor) data.guilds[guildId].favor = {};
 	if (!data.guilds[guildId].checkIns) data.guilds[guildId].checkIns = {};
+
+	// Seed Princess Jwett & Mother Jwett
+	ensureSeedData(data.guilds[guildId]);
+	if (data.guilds[guildId].favor[MOTHER_ID] === undefined) data.guilds[guildId].favor[MOTHER_ID] = 50;
+	if (data.guilds[guildId].favor[DAUGHTER_ID] === undefined) data.guilds[guildId].favor[DAUGHTER_ID] = 50;
+	if (data.guilds[guildId].rolesByUser) {
+		if (!data.guilds[guildId].rolesByUser[MOTHER_ID]) data.guilds[guildId].rolesByUser[MOTHER_ID] = "head";
+		if (!data.guilds[guildId].rolesByUser[DAUGHTER_ID]) data.guilds[guildId].rolesByUser[DAUGHTER_ID] = "kid";
+	}
+
 	return data.guilds[guildId];
 }
 
