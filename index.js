@@ -37,6 +37,9 @@ const {
 	getRpProfile,
 	addRpMemory,
 	ensureSeedData,
+	buildMorningTendingMessage,
+	buildNightTendingMessage,
+	handleEstateTendingSelectMenu,
 	MOTHER_ID,
 	DAUGHTER_ID,
 	COLORS: RP_COLORS,
@@ -189,8 +192,35 @@ function getFamilyType(member) {
 	return "guest";
 }
 
-function getFavorTier(favor = 0) {
+function getFavorTier(favor = 0, memberOrId = null, guildState = null) {
+	let isHead = false;
+	let isMother = false;
+	const id = typeof memberOrId === "string" ? memberOrId : memberOrId?.id;
+
+	if (id === MOTHER_ID) {
+		isMother = true;
+		isHead = true;
+	} else if (memberOrId && typeof memberOrId === "object" && memberOrId.guild) {
+		isHead = isHeadOfHousehold(memberOrId);
+	} else if (guildState && id && guildState.rolesByUser && guildState.rolesByUser[id] === "head") {
+		isHead = true;
+	}
+
 	if (favor >= 20) {
+		if (isMother) {
+			return {
+				title: "👑 Beloved Matriarch",
+				level: "golden",
+				desc: "Sovereign Mother of Jwett Estates. Held in supreme reverence and love, receiving prioritized devotion and imperial service from the maid."
+			};
+		}
+		if (isHead) {
+			return {
+				title: "👑 Sovereign Head of Household",
+				level: "golden",
+				desc: "Ruler of the estate. Immune to curfews, commands absolute household respect, and served finest private reserve accommodations."
+			};
+		}
 		return {
 			title: "🌟 Golden Child",
 			level: "golden",
@@ -198,6 +228,13 @@ function getFavorTier(favor = 0) {
 		};
 	}
 	if (favor >= 10) {
+		if (isMother) {
+			return {
+				title: "👑 Cherished Matriarch",
+				level: "favored",
+				desc: "Warmly served fresh estate delicacies and honored with the household's deepest devotion."
+			};
+		}
 		return {
 			title: "✨ Favored Resident",
 			level: "favored",
@@ -205,6 +242,13 @@ function getFavorTier(favor = 0) {
 		};
 	}
 	if (favor >= 0) {
+		if (isMother) {
+			return {
+				title: "👑 Respected Matriarch",
+				level: "neutral",
+				desc: "Esteemed Mother of the manor, served with utmost grace and decorum."
+			};
+		}
 		return {
 			title: "☕ Resident in Good Standing",
 			level: "neutral",
@@ -556,6 +600,51 @@ function scheduleCurfewCheck() {
 			}
 		}
 	}, 5 * 60 * 1000);
+}
+
+function scheduleEstateTendingCheck() {
+	setInterval(async () => {
+		const now = new Date();
+		const hours = String(now.getHours()).padStart(2, "0");
+		const minutes = String(now.getMinutes()).padStart(2, "0");
+		const currentTime = `${hours}:${minutes}`;
+		const todayDate = now.toDateString();
+
+		for (const [guildId, guildState] of Object.entries(data.guilds)) {
+			const morningTime = guildState.morningTime || "08:00";
+			const nightTime = guildState.nightTime || "21:00";
+			const channelId = guildState.tendingChannelId || guildState.welcomeChannelId || guildState.announceChannelId || guildState.lastActiveChannelId;
+			if (!channelId) continue;
+
+			// Morning Check
+			if (currentTime >= morningTime && guildState.lastMorningDate !== todayDate) {
+				guildState.lastMorningDate = todayDate;
+				scheduleSave();
+				try {
+					const channel = await client.channels.fetch(channelId);
+					if (channel) {
+						await channel.send(buildMorningTendingMessage(guildState));
+					}
+				} catch (err) {
+					console.error("Failed to post morning tending:", err);
+				}
+			}
+
+			// Night Check
+			if (currentTime >= nightTime && guildState.lastNightDate !== todayDate) {
+				guildState.lastNightDate = todayDate;
+				scheduleSave();
+				try {
+					const channel = await client.channels.fetch(channelId);
+					if (channel) {
+						await channel.send(buildNightTendingMessage(guildState));
+					}
+				} catch (err) {
+					console.error("Failed to post night tending:", err);
+				}
+			}
+		}
+	}, 60 * 1000);
 }
 
 function maybeReact(message, keyword, emoji) {
@@ -1076,6 +1165,7 @@ client.once("ready", async () => {
 	setPresenceRotation();
 	scheduleReminderSweep();
 	scheduleCurfewCheck();
+	scheduleEstateTendingCheck();
 });
 
 client.on("guildMemberAdd", async (member) => {
@@ -1303,8 +1393,10 @@ client.on("interactionCreate", async (interaction) => {
 		}
 	}
 
-	// Handle String Select Menus (Tea Cart, Snack Pantry, Serve Drink Context Menu)
+	// Handle String Select Menus (Tea Cart, Snack Pantry, Serve Drink, Estate Tendings)
 	if (interaction.isStringSelectMenu()) {
+		if (await handleEstateTendingSelectMenu(interaction, guildState, scheduleSave)) return;
+
 		if (interaction.customId.startsWith("tea_select:")) {
 			const [, targetId, callerId] = interaction.customId.split(":");
 			if (interaction.user.id !== callerId) {
@@ -2027,7 +2119,7 @@ client.on("interactionCreate", async (interaction) => {
 		const title = formatUserDisplay(member, guildState);
 		const roleType = getFamilyType(member);
 		const favor = guildState.favor[member.id] || 0;
-		const tier = getFavorTier(favor);
+		const tier = getFavorTier(favor, member, guildState);
 		const embed = maidEmbed(
 			"🪞 Manor Identity",
 			`**Addressed As:** ${title}\n` +
@@ -2054,7 +2146,7 @@ client.on("interactionCreate", async (interaction) => {
 		}
 		guildState.favor[targetMember.id] = (guildState.favor[targetMember.id] || 0) + 5;
 		scheduleSave();
-		const tier = getFavorTier(guildState.favor[targetMember.id]);
+		const tier = getFavorTier(guildState.favor[targetMember.id], targetMember, guildState);
 		const embed = maidEmbed(
 			"🍪 Good Behavior Acknowledged",
 			`${targetMember.displayName} has been rewarded 5 favor points.\n` +
@@ -2079,7 +2171,7 @@ client.on("interactionCreate", async (interaction) => {
 		}
 		guildState.favor[targetMember.id] = (guildState.favor[targetMember.id] || 0) - 5;
 		scheduleSave();
-		const tier = getFavorTier(guildState.favor[targetMember.id]);
+		const tier = getFavorTier(guildState.favor[targetMember.id], targetMember, guildState);
 		const embed = maidEmbed(
 			"📉 Privileges Reduced",
 			`${targetMember.displayName} has lost 5 favor points.\n` +
@@ -2093,7 +2185,7 @@ client.on("interactionCreate", async (interaction) => {
 	if (command === "favor") {
 		const targetMember = interaction.options.getMember("user") || interaction.member;
 		const favor = guildState.favor[targetMember.id] || 0;
-		const tier = getFavorTier(favor);
+		const tier = getFavorTier(favor, targetMember, guildState);
 		const embed = maidEmbed(
 			`📊 Favor Ledger: ${targetMember.displayName}`,
 			`**Standing:** ${tier.title}\n` +
@@ -2106,9 +2198,9 @@ client.on("interactionCreate", async (interaction) => {
 
 	if (command === "household") {
 		const favorEntries = Object.entries(guildState.favor).sort((a, b) => b[1] - a[1]);
-		const topBehaved = favorEntries[0] ? `<@${favorEntries[0][0]}> (${favorEntries[0][1]} favor - ${getFavorTier(favorEntries[0][1]).title})` : "None yet";
+		const topBehaved = favorEntries[0] ? `<@${favorEntries[0][0]}> (${favorEntries[0][1]} favor - ${getFavorTier(favorEntries[0][1], favorEntries[0][0], guildState).title})` : "None yet";
 		const mostChaotic = favorEntries[favorEntries.length - 1] && favorEntries[favorEntries.length - 1][1] < 0
-			? `<@${favorEntries[favorEntries.length - 1][0]}> (${favorEntries[favorEntries.length - 1][1]} favor - ${getFavorTier(favorEntries[favorEntries.length - 1][1]).title})`
+			? `<@${favorEntries[favorEntries.length - 1][0]}> (${favorEntries[favorEntries.length - 1][1]} favor - ${getFavorTier(favorEntries[favorEntries.length - 1][1], favorEntries[favorEntries.length - 1][0], guildState).title})`
 			: "None yet";
 		const unresolvedIncidents = (guildState.incidents || []).filter(i => !i.resolved).length;
 		const embed = maidEmbed(
@@ -2261,10 +2353,12 @@ client.on("interactionCreate", async (interaction) => {
 		const request = interaction.options.getString("request");
 		const roleType = getFamilyType(member);
 		const favor = guildState.favor[member.id] || 0;
-		const tier = getFavorTier(favor);
+		const tier = getFavorTier(favor, member, guildState);
 		let greeting = "";
 
-		if (isHeadOfHousehold(member)) {
+		if (member.id === MOTHER_ID) {
+			greeting = "The sterling bell chimes with supreme matriarchal authority. The maid appears almost instantaneously, bowing low in heartfelt devotion.\n\n*'At your command, Mother Jwett. How may the estate and household attend to your wishes?'* 👑✨";
+		} else if (isHeadOfHousehold(member)) {
 			greeting = "The sterling bell chimes with solemn authority. The maid appears almost instantaneously, offering a deep, respectful curtsey.\n\n*'At your command, Head of Household. How may the estate attend to your wishes?'*";
 		} else if (tier.level === "golden") {
 			greeting = "The bell tinkles in a bright, musical chime. The maid enters with an affectionate smile, carrying a clean cloth.\n\n*'A pleasure, dear child. What may I fetch or prepare for our most exemplary household member?'*";

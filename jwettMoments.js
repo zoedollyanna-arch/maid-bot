@@ -4,6 +4,7 @@ const {
 	ActionRowBuilder,
 	ButtonBuilder,
 	ButtonStyle,
+	StringSelectMenuBuilder,
 } = require("discord.js");
 
 // ── Color Palettes for Jwett Moments ♡ ──────────────────────────────────────
@@ -1017,12 +1018,114 @@ function buildJwettMomentSlashCommands() {
 		commands.push(b.toJSON());
 	}
 
+	// ☀️ Morning Breakfast Cart Command
+	commands.push(
+		new SlashCommandBuilder()
+			.setName("morning")
+			.setDescription("Call the maid's morning tending & interactive breakfast cart.")
+			.toJSON()
+	);
+
+	// 🌙 Night Turn-Down & Evening Snacks Command
+	commands.push(
+		new SlashCommandBuilder()
+			.setName("night")
+			.setDescription("Call the maid's nightly turn-down service, comfort teas & late-night treats.")
+			.toJSON()
+	);
+
+	// 🕰️ Tending Schedule Settings Command
+	commands.push(
+		new SlashCommandBuilder()
+			.setName("tending")
+			.setDescription("View or configure daily morning & night estate tending times.")
+			.addSubcommand((sub) =>
+				sub.setName("view").setDescription("View current morning & night tending schedules.")
+			)
+			.addSubcommand((sub) =>
+				sub
+					.setName("set")
+					.setDescription("Configure morning/night tending times or channel (Head of Household only).")
+					.addStringOption((opt) =>
+						opt.setName("morning_time").setDescription("Morning breakfast time in HH:MM (e.g. 08:00).").setRequired(false)
+					)
+					.addStringOption((opt) =>
+						opt.setName("night_time").setDescription("Night turn-down time in HH:MM (e.g. 21:00).").setRequired(false)
+					)
+					.addChannelOption((opt) =>
+						opt.setName("channel").setDescription("Channel for daily estate tending announcements.").setRequired(false)
+					)
+			)
+			.toJSON()
+	);
+
 	return commands;
 }
 
 // ── Slash Command Execution Handler ─────────────────────────────────────────
 async function handleJwettMomentCommand(interaction, guildState, scheduleSave) {
 	const command = interaction.commandName;
+
+	if (command === "morning") {
+		const tendingMsg = buildMorningTendingMessage(guildState);
+		await interaction.reply(tendingMsg);
+		return true;
+	}
+
+	if (command === "night") {
+		const tendingMsg = buildNightTendingMessage(guildState);
+		await interaction.reply(tendingMsg);
+		return true;
+	}
+
+	if (command === "tending") {
+		const sub = interaction.options.getSubcommand();
+		if (sub === "view") {
+			const morningTime = guildState.morningTime || "08:00";
+			const nightTime = guildState.nightTime || "21:00";
+			const channelId = guildState.tendingChannelId || guildState.welcomeChannelId || guildState.announceChannelId;
+			const channelText = channelId ? `<#${channelId}>` : "Default welcome/announce channel";
+			const embed = new EmbedBuilder()
+				.setColor(COLORS.ESTATE)
+				.setTitle("🕰️ Jwett Estates • Daily Tending Schedule")
+				.setDescription(
+					`The maid tends to the household twice daily without unsolicited disruption:\n\n` +
+					`☀️ **Morning Breakfast Cart:** \`${morningTime}\` (Daily)\n` +
+					`🌙 **Nightly Turn-Down & Comforts:** \`${nightTime}\` (Daily)\n` +
+					`📢 **Tending Channel:** ${channelText}\n\n` +
+					`*You can also call the carts on-demand at any time with \`/morning\` and \`/night\`!*`
+				)
+				.setFooter({ text: "Jwett Estates • Household Tending" });
+			await interaction.reply({ embeds: [embed] });
+			return true;
+		}
+
+		if (sub === "set") {
+			const isHead = interaction.member.guild.ownerId === interaction.user.id ||
+				interaction.user.id === MOTHER_ID ||
+				(guildState.rolesByUser && guildState.rolesByUser[interaction.user.id] === "head");
+
+			if (!isHead) {
+				await interaction.reply({ content: "👑 Only the Head of Household / Mother Jwett may configure estate tending schedules.", ephemeral: true });
+				return true;
+			}
+
+			const mTime = interaction.options.getString("morning_time");
+			const nTime = interaction.options.getString("night_time");
+			const chan = interaction.options.getChannel("channel");
+
+			if (mTime) guildState.morningTime = mTime;
+			if (nTime) guildState.nightTime = nTime;
+			if (chan) guildState.tendingChannelId = chan.id;
+			scheduleSave();
+
+			await interaction.reply({
+				content: `✅ Estate tending schedule updated!\n☀️ Morning: \`${guildState.morningTime || "08:00"}\` | 🌙 Night: \`${guildState.nightTime || "21:00"}\`${chan ? ` | Channel: <#${chan.id}>` : ""}`,
+				ephemeral: true
+			});
+			return true;
+		}
+	}
 
 	// /rp suite
 	if (command === "rp") {
@@ -1318,6 +1421,76 @@ async function handleJwettMomentCommand(interaction, guildState, scheduleSave) {
 
 // ── Button Interaction Handler ──────────────────────────────────────────────
 async function handleJwettMomentButton(interaction, guildState, scheduleSave) {
+	if (interaction.customId.startsWith("estate_morning_")) {
+		if (interaction.customId === "estate_morning_greet") {
+			await interaction.reply({
+				content: `☀️ **Good morning, Jwett Estates!** <@${interaction.user.id}> steps into the morning hall with a bright smile. The maid curtsies warmly: *"A wonderful morning to you, dear! Help yourself to fresh breakfast and hot tea from the cart."* 🌸`,
+			});
+			return true;
+		}
+		if (interaction.customId === "estate_morning_mother") {
+			await interaction.reply({
+				content: `👑 **Morning Blessings for Mother Jwett!** <@${interaction.user.id}> sends heartfelt love and reverence to Mother Jwett (<@${MOTHER_ID}>)! The maid bows low: *"May the beloved Matriarch of Jwett Estates enjoy a glorious, peaceful, and triumphant day."* 💕✨`,
+			});
+			return true;
+		}
+		if (interaction.customId === "estate_morning_princess") {
+			await interaction.reply({
+				content: `🧸 **Morning Sunshine for Princess Jwett!** <@${interaction.user.id}> taps softly on Princess Jwett's (<@${DAUGHTER_ID}>) door: *"Wake up, sweet Princess! Golden sunshine, fresh warm pancakes, and hot chocolate are waiting for you in the dining hall!"* 🥞☀️`,
+			});
+			return true;
+		}
+	}
+
+	if (interaction.customId.startsWith("estate_night_")) {
+		if (interaction.customId === "estate_night_blanket") {
+			await interaction.reply({
+				content: `🛏️ **Nightly Turn-Down:** The maid attends to <@${interaction.user.id}>'s chambers, fluffs the down pillows, turns down the crisp linen duvet, and leaves an extra plush weighted throw blanket. *"May you rest deeply and peacefully tonight."* 🌙🕯️`,
+			});
+			return true;
+		}
+		if (interaction.customId === "estate_night_tuck_princess") {
+			const actor = interaction.member;
+			const princessMember = await interaction.guild.members.fetch(DAUGHTER_ID).catch(() => null);
+			const def = MOMENT_DEFINITIONS.tuckin;
+			const princessProfile = getRpProfile(guildState, DAUGHTER_ID);
+			const targetDisplay = princessMember || { id: DAUGHTER_ID, displayName: "Princess Jwett", toString: () => `<@${DAUGHTER_ID}>` };
+			const text = def.starterText(actor, targetDisplay, princessProfile);
+
+			const embed = new EmbedBuilder()
+				.setColor(COLORS.BEDTIME)
+				.setTitle(def.banner)
+				.setDescription(text)
+				.setFooter({ text: `${def.subTitle} • Made with love ♡` })
+				.setTimestamp();
+
+			const row = new ActionRowBuilder();
+			for (const opt of def.targetOptions) {
+				row.addComponents(
+					new ButtonBuilder()
+						.setCustomId(`jm_resp:tuckin:${actor.id}:${DAUGHTER_ID}:${opt.key}`)
+						.setLabel(opt.label)
+						.setStyle(opt.style)
+				);
+			}
+			row.addComponents(
+				new ButtonBuilder()
+					.setCustomId(`jm_end:tuckin:${actor.id}:${DAUGHTER_ID}`)
+					.setLabel("❌ End Scene")
+					.setStyle(ButtonStyle.Secondary)
+			);
+
+			await interaction.reply({ embeds: [embed], components: [row] });
+			return true;
+		}
+		if (interaction.customId === "estate_night_goodnight") {
+			await interaction.reply({
+				content: `🕯️ **Goodnight, Beloved Estate:** <@${interaction.user.id}> whispers goodnight wishes to the household. The maid softly dims the corridor lights: *"Goodnight, precious soul. Sleep safely and soundly until the morning sun."* 😴🌙`,
+			});
+			return true;
+		}
+	}
+
 	if (!interaction.customId.startsWith("jm_")) return false;
 
 	const parts = interaction.customId.split(":");
@@ -1491,6 +1664,281 @@ async function handleJwettMomentButton(interaction, guildState, scheduleSave) {
 	return false;
 }
 
+// ── Estate Morning & Night Daily Tendings ───────────────────────────────────
+function buildMorningTendingMessage(guildState) {
+	const embed = new EmbedBuilder()
+		.setColor(COLORS.ESTATE) // 0xf9e2af (Warm Morning Gold)
+		.setTitle("☀️ Good Morning, Jwett Estates • Estate Breakfast Cart")
+		.setDescription(
+			`*Golden morning sunlight streams through the tall arched windows of Jwett Estates, glistening across freshly polished floors.*\n\n` +
+			`The maid curtsies deeply before the household with a gleaming silver breakfast cart:\n\n` +
+			`*"Good morning to the beautiful family and guests of Jwett Estates! A glorious new day has dawned.\n` +
+			`Fresh estate coffee and floral teas are steaming, and breakfast has just been prepared in the manor kitchen.\n\n` +
+			`Please choose your morning breakfast plate from the cart below, or send your morning wishes to Mother Jwett & family!"* 🥞☕🍳`
+		)
+		.setFooter({ text: "Jwett Estates • Daily Morning Tending • Made with love ♡" })
+		.setTimestamp();
+
+	const selectMenu = new StringSelectMenuBuilder()
+		.setCustomId("estate_morning_select")
+		.setPlaceholder("🥞 Choose your fresh morning breakfast plate...")
+		.addOptions([
+			{
+				label: "Fluffy Golden Buttermilk Pancakes",
+				value: "bf_pancakes",
+				description: "Warm berry compote, whipped farm butter & pure maple syrup",
+				emoji: "🥞",
+			},
+			{
+				label: "Eggs Benedict on Toasted Brioche",
+				value: "bf_benedict",
+				description: "Poached eggs, creamy hollandaise, smoked ham & microgreens",
+				emoji: "🍳",
+			},
+			{
+				label: "Warm Butter Croissants & Preserves",
+				value: "bf_croissant",
+				description: "Flaky French pastries with estate strawberry & fig jam",
+				emoji: "🥐",
+			},
+			{
+				label: "Orchard Fruit & Honey Greek Yogurt",
+				value: "bf_fruit",
+				description: "Sliced peaches, blackberries, wildflower honey & almond granola",
+				emoji: "🍓",
+			},
+			{
+				label: "Cinnamon Vanilla Steel-Cut Oatmeal",
+				value: "bf_oatmeal",
+				description: "Steamed milk, roasted brown sugar pecans & dried cranberries",
+				emoji: "🥣",
+			},
+			{
+				label: "Ceremonial Matcha & Avocado Sourdough",
+				value: "bf_matcha",
+				description: "Whisked Kyoto matcha latte with poached egg avocado toast",
+				emoji: "🍵",
+			},
+			{
+				label: "Royal Silver Service for Mother Jwett",
+				value: "bf_mother",
+				description: "Exclusive imperial breakfast tray delivered with utmost reverence",
+				emoji: "👑",
+			},
+		]);
+
+	const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+	const buttonRow = new ActionRowBuilder().addComponents(
+		new ButtonBuilder()
+			.setCustomId("estate_morning_greet")
+			.setLabel("☀️ Greet the Family")
+			.setStyle(ButtonStyle.Primary),
+		new ButtonBuilder()
+			.setCustomId("estate_morning_mother")
+			.setLabel("👑 Blessings for Mother Jwett")
+			.setStyle(ButtonStyle.Success),
+		new ButtonBuilder()
+			.setCustomId("estate_morning_princess")
+			.setLabel("🧸 Wake Princess Jwett with Love")
+			.setStyle(ButtonStyle.Secondary)
+	);
+
+	return { embeds: [embed], components: [selectRow, buttonRow] };
+}
+
+function buildNightTendingMessage(guildState) {
+	const embed = new EmbedBuilder()
+		.setColor(COLORS.BEDTIME) // 0xcba6f7 (Lavender Twilight)
+		.setTitle("🌙 Good Evening, Jwett Estates • Nightly Turn-Down & Comforts")
+		.setDescription(
+			`*The hearth crackles softly in the drawing room as twilight blankets the manor grounds.*\n\n` +
+			`The grand chandeliers have been dimmed to a warm amber glow. The maid walks the quiet corridors with the evening turn-down cart:\n\n` +
+			`*"Good evening, Madame and household. The estate gates are barred and all is safe for the night.\n\n` +
+			`Before everyone retires to their chambers, please enjoy an evening treat, warm tea, or turn-down service. ` +
+			`May tonight bring you peaceful, untroubled rest."* 🍪🫖🕯️`
+		)
+		.setFooter({ text: "Jwett Estates • Nightly Turn-Down Service • Made with love ♡" })
+		.setTimestamp();
+
+	const selectMenu = new StringSelectMenuBuilder()
+		.setCustomId("estate_night_select")
+		.setPlaceholder("🍪 Select an evening comfort, tea, or late-night treat...")
+		.addOptions([
+			{
+				label: "Warm Chocolate Chip Cookies & Steamed Milk",
+				value: "nt_cookies",
+				description: "Soft & gooey from the oven, served with warm vanilla milk",
+				emoji: "🍪",
+			},
+			{
+				label: "Hot Lavender Chamomile Bedtime Tea",
+				value: "nt_tea",
+				description: "Steeped herbal flowers with wildflower honey for deep rest",
+				emoji: "🫖",
+			},
+			{
+				label: "Decadent Midnight Dark Chocolate Tart",
+				value: "nt_tart",
+				description: "Rich Belgian cocoa ganache in a crisp almond shell",
+				emoji: "🍰",
+			},
+			{
+				label: "Warm Grilled Brie & Fig Finger Sandwiches",
+				value: "nt_brie",
+				description: "Savory late-night comfort on artisan crusty brioche",
+				emoji: "🥪",
+			},
+			{
+				label: "Gourmet Hot Cocoa with Giant Toasted Marshmallows",
+				value: "nt_cocoa",
+				description: "Velvety spiced cocoa topped with caramelized marshmallow",
+				emoji: "🍫",
+			},
+			{
+				label: "Evening Herbal Cordial for Mother Jwett",
+				value: "nt_mother",
+				description: "Relaxing private reserve chamomile elixir in crystal goblet",
+				emoji: "👑",
+			},
+		]);
+
+	const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+
+	const buttonRow = new ActionRowBuilder().addComponents(
+		new ButtonBuilder()
+			.setCustomId("estate_night_blanket")
+			.setLabel("🛏️ Extra Blanket & Fluffed Pillows")
+			.setStyle(ButtonStyle.Primary),
+		new ButtonBuilder()
+			.setCustomId("estate_night_tuck_princess")
+			.setLabel("🧸 Tuck In Princess Jwett")
+			.setStyle(ButtonStyle.Success),
+		new ButtonBuilder()
+			.setCustomId("estate_night_goodnight")
+			.setLabel("🕯️ Goodnight Wishes to Estate")
+			.setStyle(ButtonStyle.Secondary)
+	);
+
+	return { embeds: [embed], components: [selectRow, buttonRow] };
+}
+
+async function handleEstateTendingSelectMenu(interaction, guildState, scheduleSave) {
+	if (!interaction.isStringSelectMenu()) return false;
+	const customId = interaction.customId;
+	if (customId !== "estate_morning_select" && customId !== "estate_night_select") return false;
+
+	const choice = interaction.values[0];
+	const userId = interaction.user.id;
+	if (!guildState.favor) guildState.favor = {};
+	const currentFavor = guildState.favor[userId] || 0;
+
+	if (customId === "estate_morning_select") {
+		const breakfastData = {
+			bf_pancakes: {
+				title: "🥞 Fresh Buttermilk Pancakes Served!",
+				desc: `*The maid glides forward with a warm porcelain plate piled with fluffy golden buttermilk pancakes, sweet cream butter melting across warm berry compote and pure amber maple syrup for <@${userId}>.*\n\n*"A warm, energizing breakfast to start your day in the estate, dear!"* 🌸`,
+				favor: 1
+			},
+			bf_benedict: {
+				title: "🍳 Eggs Benedict on Brioche Served!",
+				desc: `*The maid presents a gleaming silver platter with farm-fresh poached eggs on toasted golden brioche, draped in velvety hollandaise with smoked ham and fresh herbs for <@${userId}>.*\n\n*"A royal breakfast fit for a distinguished morning."* ✨`,
+				favor: 1
+			},
+			bf_croissant: {
+				title: "🥐 Fresh Butter Croissants & Preserves!",
+				desc: `*A linen-lined bread basket of warm, flaky French butter croissants accompanied by porcelain jars of sweet estate fig and strawberry preserves is set before <@${userId}>.*\n\n*"Crisp, buttery, and utterly delightful with morning tea."* 🍓`,
+				favor: 1
+			},
+			bf_fruit: {
+				title: "🍓 Orchard Fruit & Honey Greek Yogurt!",
+				desc: `*A chilled crystal goblet overflowing with sliced peaches, plump blackberries, creamy honey Greek yogurt, and toasted almond granola is served to <@${userId}>.*\n\n*"Pure orchard sunshine in a bowl."* 🍯`,
+				favor: 1
+			},
+			bf_oatmeal: {
+				title: "🥣 Warm Cinnamon Vanilla Oatmeal!",
+				desc: `*A steaming ceramic bowl of steel-cut oats simmered with whole vanilla bean and dusted with brown sugar, toasted pecans, and a swirl of cream is brought to <@${userId}>.*\n\n*"Wholesome, comforting, and warming down to your toes."* 🍁`,
+				favor: 1
+			},
+			bf_matcha: {
+				title: "🍵 Ceremonial Matcha & Avocado Toast!",
+				desc: `*A bowl of vibrant whisked ceremonial Kyoto matcha alongside toasted sourdough with mashed avocado, poached egg, and sea salt flakes is placed before <@${userId}>.*\n\n*"Balanced, nourishing, and wonderfully refreshing."* 🌱`,
+				favor: 1
+			},
+			bf_mother: {
+				title: "👑 Imperial Morning Service for Mother Jwett!",
+				desc: `*The maid lowers into a reverent curtsy before Mother Jwett (<@${MOTHER_ID}>), lifting a domed silver cloche to reveal poached eggs, seasonal pastries, fresh estate berries, and steaming royal English breakfast tea in vintage bone china.*\n\n*"A blessed and glorious morning to you, Mother Jwett. May Your day at the estate be peaceful, triumphant, and surrounded by love."* ☕👑✨`,
+				favor: 2
+			}
+		};
+
+		const item = breakfastData[choice] || breakfastData.bf_pancakes;
+		guildState.favor[userId] = currentFavor + item.favor;
+		scheduleSave();
+
+		const embed = new EmbedBuilder()
+			.setColor(COLORS.ESTATE)
+			.setTitle(item.title)
+			.setDescription(item.desc + `\n\n✨ **+${item.favor} Favor Point** (Total: **${guildState.favor[userId]}**)`)
+			.setFooter({ text: "Jwett Estates • Morning Tending Service ♡" })
+			.setTimestamp();
+
+		await interaction.reply({ embeds: [embed] });
+		return true;
+	}
+
+	if (customId === "estate_night_select") {
+		const nightData = {
+			nt_cookies: {
+				title: "🍪 Warm Cookies & Steamed Milk Served!",
+				desc: `*The maid delivers a warm ceramic plate of freshly baked chocolate chip cookies alongside a steaming mug of vanilla milk to <@${userId}>.*\n\n*"Careful with the first bite, the chocolate is still melted and warm! May tonight bring you deep, untroubled sleep."* 🥛✨`,
+				favor: 1
+			},
+			nt_tea: {
+				title: "🫖 Hot Lavender Chamomile Bedtime Tea!",
+				desc: `*A delicate porcelain teacup of whole chamomile buds, French lavender blossoms, and raw clover honey is poured tableside for <@${userId}>.*\n\n*"Breathe in the fragrant floral steam and let all tension drift away. Sweet dreams."* 🌸`,
+				favor: 1
+			},
+			nt_tart: {
+				title: "🍰 Midnight Belgian Chocolate Tart!",
+				desc: `*A decadent slice of dark Belgian chocolate ganache tart dusted with edible gold leaf and cocoa powder is served to <@${userId}> on a slate tray.*\n\n*"A luxurious late-night indulgence for the soul."* 🍫`,
+				favor: 1
+			},
+			nt_brie: {
+				title: "🥪 Warm Grilled Brie & Fig Toast!",
+				desc: `*Thick artisan brioche grilled with rich melted French brie, sliced mission figs, and a touch of rosemary honey is presented to <@${userId}>.*\n\n*"The ultimate late-night comfort snack. Savor every bite."* 🧀`,
+				favor: 1
+			},
+			nt_cocoa: {
+				title: "🍫 Bedside Spiced Hot Cocoa!",
+				desc: `*A tall ceramic mug of rich Dutch spiced cocoa topped with a giant caramelized marshmallow and dark chocolate shavings is brought to <@${userId}>.*\n\n*"Rich, sweet, and guaranteed to invite the sweetest dreams."* ☕`,
+				favor: 1
+			},
+			nt_mother: {
+				title: "👑 Evening Herbal Cordial Presented to Mother Jwett!",
+				desc: `*The maid curtsies low and presents Mother Jwett (<@${MOTHER_ID}>) with a hand-blended nighttime chamomile cordial in a cut-crystal goblet.*\n\n*"The manor gates are barred, the candles are trimmed, and Princess Jwett is safe and loved under Your roof. Rest with complete tranquility, Mother Jwett."* 🌙🕯️👑`,
+				favor: 2
+			}
+		};
+
+		const item = nightData[choice] || nightData.nt_cookies;
+		guildState.favor[userId] = currentFavor + item.favor;
+		scheduleSave();
+
+		const embed = new EmbedBuilder()
+			.setColor(COLORS.BEDTIME)
+			.setTitle(item.title)
+			.setDescription(item.desc + `\n\n✨ **+${item.favor} Favor Point** (Total: **${guildState.favor[userId]}**)`)
+			.setFooter({ text: "Jwett Estates • Nightly Turn-Down Service ♡" })
+			.setTimestamp();
+
+		await interaction.reply({ embeds: [embed] });
+		return true;
+	}
+
+	return false;
+}
+
 module.exports = {
 	buildJwettMomentSlashCommands,
 	handleJwettMomentCommand,
@@ -1498,6 +1946,9 @@ module.exports = {
 	getRpProfile,
 	addRpMemory,
 	ensureSeedData,
+	buildMorningTendingMessage,
+	buildNightTendingMessage,
+	handleEstateTendingSelectMenu,
 	MOTHER_ID,
 	DAUGHTER_ID,
 	COLORS,
