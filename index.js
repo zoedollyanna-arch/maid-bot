@@ -688,18 +688,6 @@ const COMMANDS = [
 		)
 		.toJSON(),
 	new SlashCommandBuilder()
-		.setName("payment-reminder")
-		.setDescription("Send a cute payment awaiting embed in the current commission ticket.")
-		.addIntegerOption((option) =>
-			option
-				.setName("hours")
-				.setDescription("Hours until ticket closes (default: 1).")
-				.setRequired(false)
-				.setMinValue(1)
-				.setMaxValue(24)
-		)
-		.toJSON(),
-	new SlashCommandBuilder()
 		.setName("setrole")
 		.setDescription("Assign a family role to a user.")
 		.addStringOption((option) =>
@@ -1363,27 +1351,6 @@ client.on("interactionCreate", async (interaction) => {
 			}
 			return;
 		}
-		if (interaction.customId === "payment_ready") {
-			await interaction.reply({
-				content:
-					`💳 Wonderful news! 🌸 The maid has noted that <@${interaction.user.id}> is ready to proceed with payment. ` +
-					`Please follow the payment instructions provided by the commission holder, and do let us know once it has been sent~ 🎀`,
-				ephemeral: false,
-			});
-			return;
-		}
-
-		if (interaction.customId === "payment_close_ticket") {
-			await interaction.reply({
-				content:
-					`🌷 Of course — the maid will pass along your request to have this ticket closed. ` +
-					`Thank you for your time, <@${interaction.user.id}>. ` +
-					`Whenever you are ready to commission again, please do not hesitate to open a new ticket. ` +
-					`We hope to see you again at Jwett Estates! 🍵`,
-				ephemeral: false,
-			});
-			return;
-		}
 	}
 
 	// Handle String Select Menus (Tea Cart, Snack Pantry, Serve Drink Context Menu)
@@ -1676,49 +1643,6 @@ client.on("interactionCreate", async (interaction) => {
 		await interaction.reply(greeting);
 		return;
 	}
-
-	if (command === "payment-reminder") {
-		const hours = interaction.options.getInteger("hours") ?? 1;
-		const closeTime = Math.floor(Date.now() / 1000) + hours * 3600;
-
-		const reminderEmbed = new EmbedBuilder()
-			.setColor(0xf7c6d4) // soft pink
-			.setTitle("🌸 Awaiting Payment — Commission Ticket")
-			.setDescription(
-				[
-					"Good day, dear guest! 🎀",
-					"",
-					"Your commission ticket has been open for some time now,",
-					"and your maid has noticed payment has not yet been received. 🧾✨",
-					"",
-					`> ⏳ This ticket will be **closed** <t:${closeTime}:R> for non-payment.`,
-					"",
-					"Should you need a little more time, that is perfectly alright! 💕",
-					"Simply open a **new ticket** when you are ready and we will",
-					"pick right back up where we left off. No hard feelings at all~ 🌷",
-					"",
-					"*— With warm regards, the Maid of Jwett Estates*",
-				].join("\n")
-			)
-			.setThumbnail("https://cdn.discordapp.com/emojis/1234567890.png") // optional — remove if no custom emoji
-			.setFooter({ text: "Jwett Estates Commission Desk • Thank you for your patience 🍵" })
-			.setTimestamp();
-
-		const row = new ActionRowBuilder().addComponents(
-			new ButtonBuilder()
-				.setLabel("💳 I'm Ready to Pay!")
-				.setStyle(ButtonStyle.Success)
-				.setCustomId("payment_ready"),
-			new ButtonBuilder()
-				.setLabel("❌ Please Close This Ticket")
-				.setStyle(ButtonStyle.Danger)
-				.setCustomId("payment_close_ticket")
-		);
-
-		await interaction.reply({ embeds: [reminderEmbed], components: [row] });
-		return;
-	}
-
 
 	if (command === "setrole") {
 		if (!isHeadOfHousehold(interaction.member)) {
