@@ -6,12 +6,47 @@ A Discord maid bot designed for roleplay, cozy manor aesthetics, and household m
 
 ## 🌟 Key Features
 
-### 1. 🛡️ Anti-Spam & Chat Flow Protection
-- **Subtle Emoji Reactions:** Common keywords (`tired`, `sleepy`, `hungry`, `bored`, `dirty`, `food`) receive organic emoji reactions (🍵, 💤, 🍪, 🧶, 🧹, 🍽️) rather than unsolicited chat messages.
-- **On-Demand Interaction:** The maid only speaks when directly addressed (e.g., `"Maid, ..."` or `@Maid`) or during extremely rare ambient moments (15% chance, 20-minute channel cooldown).
-- **Drama De-escalation:** Monitored conflict triggers (`drama`, `fight`, `argue`) activate gentle reminders to lower the temperature with a 10-minute cooldown.
+### 1. 🛡️ Zero-Spam Guarantee & Anti-Spam Protection
+- **No Unsolicited Silence Spam:** The old 30-minute quiet check (`"Am I dismissed, or are we ignoring each other?"`, `"The halls are quiet"`) is permanently disabled!
+- **Zero Chat Disruption:** The maid **NEVER** sends uninvited text messages into chat during roleplay.
+- **Explicit Mentions Only:** Text replies trigger **only** when a member explicitly `@mentions` the maid directly.
+- **Subtle Emoji Reactions:** Everyday words (`tired`, `sleepy`, `hungry`, `bored`, `dirty`, `food`) receive organic emoji reactions (🍵, 💤, 🍪, 🧹, 🍽️) rather than unsolicited text messages.
+- **Drama De-escalation:** Conflict keywords (`drama`, `fight`, `argue`) trigger gentle calming reminders with a 10-minute cooldown.
 
-### 2. 🫖 Interactive Discord Components (Buttons & Dropdowns)
+### 2. 🎀 Jwett Moments ♡ — Interactive Family Roleplay System
+Turn your server into an interactive family RP experience where members perform actions, respond with real Discord buttons, advance branching scenes, level up closeness, and save family memories!
+
+#### 🌸 Interactive Multi-Turn Scenes:
+- **/tuckin `target` `[style]`:** Bedtime moment with warm blankets, nightlights, and favorite comfort items!
+  - **Target's Turn:** `[🧸 Snuggle Closer]`, `[💋 Kiss Goodnight]`, `[📖 Ask for a Story]`, `[😴 Fall Asleep]`, `[❌ End Scene]`
+  - Clicking a choice advances the scene with a custom narrative and gives the initiator follow-up options (`[💗 Stay a Little Longer]`, `[🌙 Sing a Lullaby]`, etc.)
+  - Closing beat automatically saves a memory to the family album and increases relationship closeness!
+  - **Permissions Guard:** Only the intended participant can click their turn's buttons!
+
+#### 🧸 Full Suite of Roleplay Moments:
+- **🎀 Affection:** `/hug`, `/kiss`, `/kissforehead`, `/cuddle`, `/holdhands`, `/carry`
+- **🧸 Mommy & Baby / Parenting:** `/tuckin`, `/rock`, `/soothe`, `/feed`, `/bathtime`, `/brushhair`
+- **🌙 Bedtime:** `/goodnight`, `/storytime`, `/lullaby`, `/nightmare`, `/wake`
+- **🏡 Family Life:** `/cook`, `/familydinner`, `/homework`, `/knock`, `/visit`
+- **💕 Emotional RP:** `/comfort`, `/cry`, `/apologize`, `/reassure`, `/checkon`
+- **🥂 Estate Lifestyle:** `/spa`, `/shopping`, `/familyouting`, `/movie`, `/familymeeting`
+- **🎁 Special Moments:** `/surprise`, `/gift`, `/birthday`, `/celebrate`, `/proudofyou`
+
+#### 👑 Signature Color Palettes:
+- **Baby Pink (`#f7c6d4`):** Affection & Mommy/Baby
+- **Lavender (`#cba6f7`):** Bedtime & Lullabies
+- **Warm Peach (`#fab387`):** Family Life & Dinners
+- **Soft Aqua (`#89dceb`):** Emotional Support & Comfort
+- **Champagne Gold (`#f9e2af`):** Estate Lifestyle & Celebrations
+
+#### 📜 Character Profiles & Family Ties (`/rp`):
+- **/rp profile `[user]`:** Displays family role, RP mood, favorite comfort item, stage/age, pronouns, family connections, total moments shared, and last recorded memory!
+- **/rp setup:** Personalize your own family roleplay character card.
+- **/rp relationship `set|remove` `target` `relation`:** Establish deep family bonds (e.g. *Mother, Daughter, Son, Sister, Auntie*). Relationships level up with mutual interactions (*Inseparable Souls 💕, Deeply Cherished 🌸*).
+- **/rp family `[user]`:** View a member's family connections and closeness tiers.
+- **/rp memories `[user]`:** Browse the Jwett Estates scrapbook of cherished family moments.
+
+### 3. 🫖 Interactive Discord Components (Buttons & Dropdowns)
 - **/tea:** Wheels out an interactive tea cart with custom blends:
   - *Chamomile & Lavender Honey*
   - *Black Earl Grey*
@@ -32,7 +67,7 @@ A Discord maid bot designed for roleplay, cozy manor aesthetics, and household m
     - **2–9:** Mediocre effort (0 Favor).
     - **Natural 1:** Clumsy catastrophe! Shatters porcelain heirloom (-1 Favor).
 
-### 3. 🛎️ Roleplay Service Bell
+### 4. 🛎️ Roleplay Service Bell
 - **/bell `[request]`:** Ring the silver service bell.
   - Custom roleplay greetings based on role (`Head of Household`, `Kids`, `Siblings`, `Kin`) and favor standing:
     - **Head of Household:** Immediate, deferential response (*"At your command, Head of Household"*).
@@ -40,7 +75,7 @@ A Discord maid bot designed for roleplay, cozy manor aesthetics, and household m
     - **In the Doghouse:** Scolded (*"Ring that bell again with dirty hands and see what happens"*).
     - **Kids:** Inquisitive (*"What has been spilled or misplaced this time?"*).
 
-### 4. 📊 Favor & Standing System
+### 5. 📊 Favor & Standing System
 - **Status Tiers:**
   - 🌟 **Golden Child (20+ Favor):** Curfew callout immunity, secret gourmet treats, priority attention.
   - ✨ **Favored Resident (10+ Favor):** Unlocks fresh pastries and afternoon tea treats.
@@ -51,7 +86,7 @@ A Discord maid bot designed for roleplay, cozy manor aesthetics, and household m
 - **/whoami:** View your household role, custom title, and favor standing tier.
 - **/household:** View full manor standings, curfew status, active reminders, and pending incident reports.
 
-### 5. 📜 Manor Incident Ledger
+### 6. 📜 Manor Incident Ledger
 - **/incident record `user` `infraction`:** Log a household incident (e.g. `"Left wet umbrella on antique chaise"`). The maid records it with formal commentary in the ledger and announces it.
 - **/incident log `[user]`:** Review recent manor infractions and their current review status.
 - **/incident resolve `id` `verdict`:** (*Head of Household only*) Adjudicate incidents:
@@ -60,7 +95,7 @@ A Discord maid bot designed for roleplay, cozy manor aesthetics, and household m
   - *Severe Penalty* (-5 favor points & chores)
   - *Exonerated* (+1 favor point for false accusation)
 
-### 6. 🖱️ Discord User Apps (Zero-Typing Roleplay)
+### 7. 🖱️ Discord User Apps (Zero-Typing Roleplay)
 Right-click any member in chat -> **Apps**:
 - **Serve Drink:** Opens an ephemeral menu to choose a beverage (Afternoon Tea, Hot Cocoa, Lemonade, Coffee, Spiced Cider, Ice Water) delivered directly to them by the maid with custom flavor text.
 - **Tuck In:** Fluffs pillows and adjusts blankets for that member with custom role-based narration.

@@ -30,6 +30,14 @@ const {
 	ApplicationCommandType,
 } = require("discord.js");
 require("dotenv").config();
+const {
+	buildJwettMomentSlashCommands,
+	handleJwettMomentCommand,
+	handleJwettMomentButton,
+	getRpProfile,
+	addRpMemory,
+	COLORS: RP_COLORS,
+} = require("./jwettMoments");
 
 const DATA_PATH = path.join(__dirname, "data.json");
 const DEFAULT_WELCOME_CHANNEL_ID = "1461354800833626122";
@@ -481,32 +489,9 @@ function scheduleReminderSweep() {
 	}, 30 * 1000);
 }
 
-function scheduleQuietCheck() {
-	setInterval(async () => {
-		const now = Date.now();
-		for (const [guildId, guildState] of Object.entries(data.guilds)) {
-			if (!guildState.lastActiveChannelId) continue;
-			if (now - guildState.lastMessageAt < 30 * 60 * 1000) continue;
-			if (now - guildState.lastNudgeAt < 30 * 60 * 1000) continue;
-
-			guildState.lastNudgeAt = now;
-			scheduleSave();
-
-			try {
-				const channel = await client.channels.fetch(guildState.lastActiveChannelId);
-				if (channel) {
-					await channel.send(choose([
-						"Am I dismissed, or are we ignoring each other?",
-						"The halls are quiet. Should I ring a bell?",
-						"Silence noted. I am still watching.",
-					]));
-				}
-			} catch (error) {
-				// Ignore.
-			}
-		}
-	}, 5 * 60 * 1000);
-}
+// scheduleQuietCheck has been deactivated permanently:
+// The bot will NEVER send unsolicited "Am I dismissed?" or "The halls are quiet" silence messages.
+function scheduleQuietCheck() {}
 
 function scheduleCurfewCheck() {
 	setInterval(async () => {
@@ -570,17 +555,13 @@ const SIMPLE_RESPONSE_COMMANDS = [
 	{ name: "dinner", description: "Ask about dinner." },
 	{ name: "rules", description: "Ask about the rules." },
 	{ name: "menu", description: "Ask about the menu." },
-	{ name: "cook", description: "Ask what the maid is doing." },
 	{ name: "laundry", description: "Ask about laundry." },
 	{ name: "fold", description: "Ask about folding laundry." },
 	{ name: "bedtime", description: "Ask about bedtime." },
-	{ name: "wake", description: "Ask about wake-up." },
 	{ name: "routine", description: "Ask about the routine." },
-	{ name: "hug", description: "Ask for a hug." },
 	{ name: "badday", description: "Mention a bad day." },
 	{ name: "house", description: "Ask about the house." },
 	{ name: "weather", description: "Ask about the weather." },
-	{ name: "homework", description: "Ask about homework time." },
 	{ name: "clean", description: "Ask about cleaning." },
 ];
 
@@ -1033,20 +1014,7 @@ const COMMANDS = [
 				)
 		)
 		.toJSON(),
-	new SlashCommandBuilder()
-		.setName("tuckin")
-		.setDescription("Get tucked in for bedtime.")
-		.addUserOption((option) =>
-			option.setName("user").setDescription("Tuck in someone else.").setRequired(false)
-		)
-		.toJSON(),
-	new SlashCommandBuilder()
-		.setName("comfort")
-		.setDescription("Request comfort from the maid.")
-		.addUserOption((option) =>
-			option.setName("user").setDescription("Comfort another user.").setRequired(false)
-		)
-		.toJSON(),
+	...buildJwettMomentSlashCommands(),
 	new SlashCommandBuilder()
 		.setName("tidy")
 		.setDescription("The maid reports on the house.")
@@ -1094,7 +1062,6 @@ client.once("ready", async () => {
 	await registerCommands();
 	setPresenceRotation();
 	scheduleReminderSweep();
-	scheduleQuietCheck();
 	scheduleCurfewCheck();
 });
 
@@ -1160,12 +1127,10 @@ client.on("messageCreate", async (message) => {
 	}
 
 	const isMentioned = message.mentions.has(client.user);
-	const directlyAddressesMaid = isMentioned || /\b(maid|maidbot)\b/i.test(message.content);
 
-	// Unprompted text replies ONLY trigger if:
-	// 1. Explicitly addressed to the maid (maid, ...) OR
-	// 2. Very rare chance (15%) + 20-minute channel cooldown to avoid disrupting scenes!
-	if (directlyAddressesMaid) {
+	// The maid will NEVER send unsolicited text replies into chat or disturb active roleplay.
+	// Text replies trigger ONLY if a member explicitly @mentions the maid bot directly!
+	if (isMentioned) {
 		if (/\b(tired|sleepy)\b/i.test(message.content)) {
 			message.channel.send(choose([
 				"Sit down. I insist.",
@@ -1192,42 +1157,12 @@ client.on("messageCreate", async (message) => {
 		}
 		// General address
 		message.channel.send(choose([
-			"Present. How may I be of service?",
-			"I am here, dear. What does the household require?",
+			"Present. How may I be of service to the household?",
+			"I am here, dear. What does the family require?",
 			"You summoned me? Speak quickly, the kettle is whistling.",
 			"Listening quietly."
 		])).catch(() => undefined);
 		return;
-	}
-
-	// Natural ambient reaction (15% chance with 20 min channel cooldown)
-	const chatKey = `chat_flow:${message.channel.id}`;
-	const lastChat = guildState.cooldowns[chatKey] || 0;
-	if (Date.now() - lastChat > 20 * 60 * 1000) {
-		if (Math.random() < 0.15) {
-			if (/\b(tired|sleepy)\b/i.test(message.content)) {
-				guildState.cooldowns[chatKey] = Date.now();
-				scheduleSave();
-				message.channel.send(choose([
-					"Sit down. I insist.",
-					"Rest. I will handle it."
-				])).catch(() => undefined);
-			} else if (/\bhungry\b/i.test(message.content)) {
-				guildState.cooldowns[chatKey] = Date.now();
-				scheduleSave();
-				message.channel.send(choose([
-					"That explains the attitude.",
-					"Kitchen is ready if you behave."
-				])).catch(() => undefined);
-			} else if (/\bbored\b/i.test(message.content)) {
-				guildState.cooldowns[chatKey] = Date.now();
-				scheduleSave();
-				message.channel.send(choose([
-					"Boredom is a choice. Choose better.",
-					"I have plenty of silver that needs polishing if your hands are idle."
-				])).catch(() => undefined);
-			}
-		}
 	}
 });
 
@@ -1243,8 +1178,10 @@ client.on("interactionCreate", async (interaction) => {
 	guildState.lastMessageAt = Date.now();
 	guildState.lastActiveChannelId = interaction.channelId;
 
-	// Handle Buttons (e.g. Household Chore Board)
+	// Handle Buttons (e.g. Household Chore Board, Jwett Moments RP)
 	if (interaction.isButton()) {
+		if (await handleJwettMomentButton(interaction, guildState, scheduleSave)) return;
+
 		if (interaction.customId.startsWith("chore_")) {
 			const member = interaction.member;
 			const userId = interaction.user.id;
@@ -1534,24 +1471,42 @@ client.on("interactionCreate", async (interaction) => {
 		}
 
 		if (interaction.commandName === "Tuck In") {
-			const type = targetMember ? getFamilyType(targetMember) : "guest";
-			let description = "";
-
-			if (type === "kid") {
-				description = `*The maid gently tucks <@${targetUser.id}> beneath the thick down quilt, smoothing the linen and fluffing the pillows on behalf of <@${interaction.user.id}>.*\n\n*"Forehead kiss deployed. Lights out, and sweet dreams, young one. The house is peaceful."* 🌙🧸`;
-			} else if (type === "head") {
-				description = `*The maid draws the heavy velvet curtains and arranges the weighted comforter for <@${targetUser.id}> with deep reverence on behalf of <@${interaction.user.id}>.*\n\n*"Rest well, Head of Household. The doors are barred, the hearth is banked, and the estate is safe."* 🕯️🗝️`;
-			} else {
-				description = `*The maid drapes a plush wool blanket over <@${targetUser.id}>, sent with warmth and care by <@${interaction.user.id}>.*\n\n*"Breathe out the tension of the day. Sleep deeply and wake restored."* ✨🛏️`;
+			if (!targetMember) {
+				await interaction.reply({ content: "Target member is no longer in this server.", ephemeral: true });
+				return;
 			}
+			const actor = interaction.member;
+			const targetProfile = getRpProfile(guildState, targetUser.id);
+			const item = targetProfile?.comfortItem || "favorite plush teddy";
 
-			const embed = maidEmbed("🛏️ Tucked In for the Night", description, "#2b2d42");
-			await interaction.reply({ embeds: [embed] });
+			const embed = new EmbedBuilder()
+				.setColor(RP_COLORS.BEDTIME)
+				.setTitle("🌙 A Little Love Before Dreamland")
+				.setDescription(
+					`*The soft glow of the bedside lamp warms the room as ${actor} gently smooths the linen sheets over ${targetMember}.*\n\n` +
+					`Tucking ${targetMember}'s ${item} snug beside them, ${actor} brushes soft strands of hair from their forehead before leaning down to plant a tender, loving kiss.\n\n` +
+					`*"Sweet dreams, my precious one. Rest easy knowing you are loved beyond words."* 🥹💕\n\n` +
+					`**${targetMember.displayName.toUpperCase()}'S TURN • Choose how to respond:**`
+				)
+				.setFooter({ text: "Jwett Estates • Bedtime Moments • Made with love ♡" })
+				.setTimestamp();
+
+			const row = new ActionRowBuilder().addComponents(
+				new ButtonBuilder().setCustomId(`jm_resp:tuckin:${actor.id}:${targetUser.id}:snuggle`).setLabel("🧸 Snuggle Closer").setStyle(ButtonStyle.Primary),
+				new ButtonBuilder().setCustomId(`jm_resp:tuckin:${actor.id}:${targetUser.id}:kiss`).setLabel("💋 Kiss Goodnight").setStyle(ButtonStyle.Success),
+				new ButtonBuilder().setCustomId(`jm_resp:tuckin:${actor.id}:${targetUser.id}:story`).setLabel("📖 Ask for a Story").setStyle(ButtonStyle.Secondary),
+				new ButtonBuilder().setCustomId(`jm_resp:tuckin:${actor.id}:${targetUser.id}:sleep`).setLabel("😴 Fall Asleep").setStyle(ButtonStyle.Secondary),
+				new ButtonBuilder().setCustomId(`jm_end:tuckin:${actor.id}:${targetUser.id}`).setLabel("❌ End Scene").setStyle(ButtonStyle.Secondary)
+			);
+
+			await interaction.reply({ embeds: [embed], components: [row] });
 			return;
 		}
 	}
 
 	if (!interaction.isChatInputCommand()) return;
+
+	if (await handleJwettMomentCommand(interaction, guildState, scheduleSave)) return;
 
 	const command = interaction.commandName;
 	const member = interaction.member;
@@ -2458,40 +2413,6 @@ client.on("interactionCreate", async (interaction) => {
 			await interaction.reply({ embeds: [embed] });
 			return;
 		}
-	}
-
-	if (command === "tuckin") {
-		const targetMember = interaction.options.getMember("user") || interaction.member;
-		const type = getFamilyType(targetMember);
-		let message = "Blanket adjusted. Sleep well.";
-		if (type === "kid") {
-			message = `Blanket adjusted for ${targetMember.displayName}. Forehead kiss deployed. Sleep tight, young one.`;
-		} else if (type === "head") {
-			message = `Rest well, ${targetMember.displayName}. The household is secure.`;
-		}
-		const embed = maidEmbed("🛏️ Tucked In", message);
-		await interaction.reply({ embeds: [embed] });
-		return;
-	}
-
-	if (command === "comfort") {
-		const targetMember = interaction.options.getMember("user") || interaction.member;
-		const type = getFamilyType(targetMember);
-		const favor = guildState.favor[targetMember.id] || 0;
-		let message = "You are safe here. Breathe.";
-		
-		if (favor <= -10) {
-			message = `${targetMember.displayName}, you have accumulated negative favor and tested the family's patience. Sit in the quiet corner and reflect. When your chores are done, comfort will be waiting.`;
-		} else if (type === "kid") {
-			message = `Gentle hug deployed for ${targetMember.displayName}. It will be alright, young one.`;
-		} else if (type === "sibling") {
-			message = `${targetMember.displayName}, sit. You do not have to explain. Just rest.`;
-		} else if (type === "head") {
-			message = `${targetMember.displayName}, even the Head of Household needs rest. I will manage things.`;
-		}
-		const embed = maidEmbed("🧸 Comfort Delivered", message, "#9d8ac5");
-		await interaction.reply({ embeds: [embed] });
-		return;
 	}
 
 	if (command === "tidy") {
